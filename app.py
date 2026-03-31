@@ -1,3 +1,15 @@
+import sys
+import importlib.util
+
+# Patch audioop for Python 3.13 compatibility before importing gradio
+try:
+    import audioop
+except ModuleNotFoundError:
+    # Create a dummy audioop module for pydub
+    import types
+    audioop = types.ModuleType('audioop')
+    sys.modules['audioop'] = audioop
+
 import gradio as gr
 import os
 from pdf_processor import PDFProcessor
