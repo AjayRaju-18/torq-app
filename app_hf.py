@@ -40,15 +40,16 @@ def upload_pdf(file):
 def chat(message, history, use_rag):
     """Chat with TORQ"""
     if not message:
-        yield history
-        return
+        return history
     
     try:
         conv_history = []
         if history:
-            for human, assistant in history:
-                conv_history.append({'role': 'user', 'content': human})
-                conv_history.append({'role': 'assistant', 'content': assistant})
+            for msg in history:
+                if msg['role'] == 'user':
+                    conv_history.append({'role': 'user', 'content': msg['content']})
+                elif msg['role'] == 'assistant':
+                    conv_history.append({'role': 'assistant', 'content': msg['content']})
         
         if use_rag:
             result = torq_model.generate_response(message, conv_history)
@@ -58,15 +59,17 @@ def chat(message, history, use_rag):
         else:
             response = torq_model.generate_chat_response(message, conv_history)
         
-        history.append((message, response))
-        yield history
+        history.append({'role': 'user', 'content': message})
+        history.append({'role': 'assistant', 'content': response})
+        return history
     
     except Exception as e:
-        history.append((message, f"Error: {str(e)}"))
-        yield history
+        history.append({'role': 'user', 'content': message})
+        history.append({'role': 'assistant', 'content': f"Error: {str(e)}"})
+        return history
 
 # Create Gradio interface
-with gr.Blocks(title="TORQ") as demo:
+with gr.Blocks() as demo:
     gr.Markdown("""
     # 🤖 TORQ - Mechanical Engineering Assistant
     ### Powered by GROQ LLM with RAG
@@ -94,7 +97,7 @@ with gr.Blocks(title="TORQ") as demo:
         
         with gr.Column(scale=2):
             gr.Markdown("### 💬 Chat")
-            chatbot = gr.Chatbot(height=500, type="messages")
+            chatbot = gr.Chatbot(type="messages", height=500)
             msg = gr.Textbox(
                 label="Your message",
                 placeholder="Ask about mechanical engineering...",
@@ -133,4 +136,5 @@ with gr.Blocks(title="TORQ") as demo:
     
     clear.click(lambda: [], None, chatbot)
 
-demo.launch()
+if __name__ == "__main__":
+    demo.launch()

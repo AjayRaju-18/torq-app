@@ -3,3 +3,4 @@ pypdf2
 chromadb
 sentence-transformers
 python-dotenv
+gradio
