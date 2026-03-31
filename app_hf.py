@@ -69,7 +69,7 @@ def chat(message, history, use_rag):
         return f"Error: {str(e)}"
 
 # Create Gradio interface
-with gr.Blocks(title="TORQ - Mechanical Engineering Assistant", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="TORQ - Mechanical Engineering Assistant") as demo:
     gr.Markdown("""
     # 🤖 TORQ - Mechanical Engineering Assistant
     ### Powered by GROQ LLM with RAG
@@ -97,11 +97,7 @@ with gr.Blocks(title="TORQ - Mechanical Engineering Assistant", theme=gr.themes.
         
         with gr.Column(scale=2):
             gr.Markdown("### 💬 Chat with TORQ")
-            chatbot = gr.Chatbot(
-                height=500,
-                bubble_full_width=False,
-                avatar_images=(None, "🤖")
-            )
+            chatbot = gr.Chatbot(height=500)
             msg = gr.Textbox(
                 label="Your message",
                 placeholder="Ask me anything about mechanical engineering...",
@@ -149,4 +145,4 @@ with gr.Blocks(title="TORQ - Mechanical Engineering Assistant", theme=gr.themes.
     clear.click(lambda: None, None, chatbot, queue=False)
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
