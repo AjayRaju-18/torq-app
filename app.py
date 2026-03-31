@@ -1,184 +1,130 @@
-import sys
-import importlib.util
-import types
-
-# Patch audioop for Python 3.13 compatibility before importing gradio
-try:
-    import audioop
-except ModuleNotFoundError:
-    audioop = types.ModuleType('audioop')
-    sys.modules['audioop'] = audioop
-
-# Patch gradio-client json_schema_to_python_type before importing gradio
-try:
-    from gradio_client import utils as client_utils
-    original_json_schema = client_utils.json_schema_to_python_type
-    
-    def patched_json_schema(schema, defs=None):
-        if isinstance(schema, bool):
-            return "bool"
-        return original_json_schema(schema, defs)
-    
-    client_utils.json_schema_to_python_type = patched_json_schema
-except:
-    pass
-
-import gradio as gr
+import streamlit as st
 import os
 from pdf_processor import PDFProcessor
 from vector_store import VectorStore
 from torq_model import TORQModel
 from datetime import datetime
 
+# Page config
+st.set_page_config(
+    page_title="TORQ - Mechanical Engineering Assistant",
+    page_icon="🤖",
+    layout="wide"
+)
+
 # Initialize TORQ
-torq_model = TORQModel()
-pdf_processor = PDFProcessor()
-vector_store = VectorStore()
+@st.cache_resource
+def init_torq():
+    return TORQModel(), PDFProcessor(), VectorStore()
 
-def upload_pdf(file):
-    """Process uploaded PDF"""
-    if file is None:
-        return "No file uploaded"
-    
-    try:
-        text = pdf_processor.extract_text_from_pdf(file.name)
-        chunks = pdf_processor.split_text(text)
-        
-        documents = []
-        filename = os.path.basename(file.name)
-        for i, chunk in enumerate(chunks):
-            documents.append({
-                'content': chunk,
-                'metadata': {
-                    'source': filename,
-                    'chunk_id': i,
-                    'upload_date': datetime.now().isoformat()
-                }
-            })
-        
-        vector_store.add_documents(documents)
-        return f"✅ Successfully processed {filename} - Added {len(chunks)} chunks"
-    
-    except Exception as e:
-        return f"❌ Error: {str(e)}"
+torq_model, pdf_processor, vector_store = init_torq()
 
-def chat(message, history, use_rag):
-    """Chat with TORQ"""
-    if not message or not message.strip():
-        return history
-    
-    try:
-        # Convert history to conversation format for the model
-        conv_history = []
-        if history:
-            for item in history:
-                if isinstance(item, (list, tuple)) and len(item) == 2:
-                    conv_history.append({'role': 'user', 'content': item[0]})
-                    conv_history.append({'role': 'assistant', 'content': item[1]})
-        
-        # Generate response
-        if use_rag:
-            result = torq_model.generate_response(message, conv_history)
-            response = result['answer']
-            if result.get('sources'):
-                response += f"\n\n📚 Sources: {', '.join(result['sources'])}"
-        else:
-            response = torq_model.generate_chat_response(message, conv_history)
-        
-        # Return as list of [user, bot] pairs
-        new_history = list(history) if history else []
-        new_history.append([message, response])
-        
-        return new_history
-    
-    except Exception as e:
-        error_msg = f"Error: {str(e)}"
-        new_history = list(history) if history else []
-        new_history.append([message, error_msg])
-        return new_history
+# Initialize session state
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
 # Custom CSS for ChatGPT-like dark theme
-custom_css = """
-.gradio-container {
-    background: linear-gradient(to bottom, #202123, #343541) !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-button.primary {
-    background-color: #10a37f !important;
-    border: none !important;
-}
-button.primary:hover {
-    background-color: #0d8c6f !important;
-}
-"""
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(to bottom, #202123, #343541);
+    }
+    .stChatMessage {
+        background-color: #444654;
+        border-radius: 8px;
+    }
+    .stButton>button {
+        background-color: #10a37f;
+        color: white;
+        border: none;
+    }
+    .stButton>button:hover {
+        background-color: #0d8c6f;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Create Gradio interface
-with gr.Blocks(css=custom_css, title="TORQ") as demo:
+# Title
+st.title("🤖 TORQ - Mechanical Engineering Assistant")
+st.caption("Powered by GROQ LLM with RAG")
+
+# Sidebar
+with st.sidebar:
+    st.header("📄 Upload PDFs")
+    uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
     
-    gr.Markdown("""
-    # 🤖 TORQ - Mechanical Engineering Assistant
-    ### Powered by GROQ LLM with RAG
-    """)
+    if uploaded_file and st.button("Process PDF", type="primary"):
+        with st.spinner("Processing PDF..."):
+            try:
+                # Save uploaded file temporarily
+                temp_path = f"temp_{uploaded_file.name}"
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                
+                # Process PDF
+                text = pdf_processor.extract_text_from_pdf(temp_path)
+                chunks = pdf_processor.split_text(text)
+                
+                documents = []
+                for i, chunk in enumerate(chunks):
+                    documents.append({
+                        'content': chunk,
+                        'metadata': {
+                            'source': uploaded_file.name,
+                            'chunk_id': i,
+                            'upload_date': datetime.now().isoformat()
+                        }
+                    })
+                
+                vector_store.add_documents(documents)
+                os.remove(temp_path)
+                
+                st.success(f"✅ Successfully processed {uploaded_file.name} - Added {len(chunks)} chunks")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
     
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### 📄 Upload PDFs")
-            pdf_input = gr.File(
-                label="Upload PDF",
-                file_types=[".pdf"],
-                type="filepath"
-            )
-            upload_btn = gr.Button("Process PDF", variant="primary")
-            upload_status = gr.Textbox(label="Status", lines=3)
+    st.divider()
+    st.header("⚙️ Settings")
+    use_rag = st.checkbox("Enable RAG Mode", value=True, help="Use uploaded PDFs for context")
+    
+    if st.button("Clear Chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+# Chat interface
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Ask about mechanical engineering..."):
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    # Generate response
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            try:
+                # Convert history
+                conv_history = []
+                for msg in st.session_state.messages[:-1]:  # Exclude current message
+                    conv_history.append({'role': msg['role'], 'content': msg['content']})
+                
+                # Generate response
+                if use_rag:
+                    result = torq_model.generate_response(prompt, conv_history)
+                    response = result['answer']
+                    if result.get('sources'):
+                        response += f"\n\n📚 Sources: {', '.join(result['sources'])}"
+                else:
+                    response = torq_model.generate_chat_response(prompt, conv_history)
+                
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
             
-            gr.Markdown("### ⚙️ Settings")
-            rag_toggle = gr.Checkbox(
-                label="Enable RAG Mode",
-                value=True,
-                info="Use uploaded PDFs for context"
-            )
-        
-        with gr.Column(scale=2):
-            gr.Markdown("### 💬 Chat")
-            chatbot = gr.Chatbot(height=500)
-            msg = gr.Textbox(
-                label="Your message",
-                placeholder="Ask about mechanical engineering...",
-                lines=2,
-                show_label=False
-            )
-            with gr.Row():
-                submit = gr.Button("Send", variant="primary")
-                clear = gr.Button("Clear")
-    
-    # Event handlers
-    upload_btn.click(
-        fn=upload_pdf,
-        inputs=[pdf_input],
-        outputs=[upload_status]
-    )
-    
-    submit.click(
-        fn=chat,
-        inputs=[msg, chatbot, rag_toggle],
-        outputs=[chatbot]
-    ).then(
-        lambda: "",
-        None,
-        [msg]
-    )
-    
-    msg.submit(
-        fn=chat,
-        inputs=[msg, chatbot, rag_toggle],
-        outputs=[chatbot]
-    ).then(
-        lambda: "",
-        None,
-        [msg]
-    )
-    
-    clear.click(lambda: [], None, chatbot)
-
-if __name__ == "__main__":
-    demo.launch()
+            except Exception as e:
+                error_msg = f"Error: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
