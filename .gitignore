@@ -29,3 +29,4 @@ uploads/
 *.db
 *.sqlite
 .DS_Store
+.streamlit/secrets.toml

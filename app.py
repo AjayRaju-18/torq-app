@@ -263,6 +263,9 @@ def get_conversation_context(messages, max_context=5):
 def call_groq(messages, api_key):
     import requests
     
+    if not api_key:
+        return "Error: GROQ API key not found. Please check your Streamlit secrets configuration."
+    
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
@@ -277,10 +280,42 @@ def call_groq(messages, api_key):
     
     try:
         response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
-                               headers=headers, json=data)
-        return response.json()['choices'][0]['message']['content']
-    except:
-        return "Error: Could not connect to GROQ API"
+                               headers=headers, json=data, timeout=30)
+        
+        # Check if request was successful
+        if response.status_code == 200:
+            result = response.json()
+            if 'choices' in result and len(result['choices']) > 0:
+                return result['choices'][0]['message']['content']
+            else:
+                return f"Error: Unexpected API response format: {result}"
+        
+        elif response.status_code == 401:
+            return "Error: Invalid GROQ API key. Please check your API key in Streamlit secrets."
+        
+        elif response.status_code == 429:
+            return "Error: GROQ API rate limit exceeded. Please try again in a moment."
+        
+        elif response.status_code == 500:
+            return "Error: GROQ API server error. Please try again later."
+        
+        else:
+            return f"Error: GROQ API returned status {response.status_code}: {response.text}"
+            
+    except requests.exceptions.Timeout:
+        return "Error: Request to GROQ API timed out. Please check your internet connection."
+    
+    except requests.exceptions.ConnectionError:
+        return "Error: Could not connect to GROQ API. Please check your internet connection."
+    
+    except requests.exceptions.RequestException as e:
+        return f"Error: Network request failed: {str(e)}"
+    
+    except KeyError as e:
+        return f"Error: Missing key in API response: {str(e)}"
+    
+    except Exception as e:
+        return f"Error: Unexpected error calling GROQ API: {str(e)}"
 
 # Streamlit app
 st.set_page_config(
@@ -715,9 +750,32 @@ if prompt := st.chat_input("Ask me anything about mechanical engineering..."):
     
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            api_key = os.getenv('GROQ_API_KEY')
+            # Get API key from Streamlit secrets or environment
+            api_key = None
+            try:
+                # First try Streamlit secrets (for cloud deployment)
+                api_key = st.secrets.get("GROQ_API_KEY")
+            except:
+                pass
+            
             if not api_key:
-                response = "Please set GROQ_API_KEY in Streamlit secrets"
+                # Fallback to environment variable (for local development)
+                api_key = os.getenv('GROQ_API_KEY')
+            
+            if not api_key:
+                response = """
+**API Key Missing** 🔑
+
+For local development, set the API key as an environment variable:
+```bash
+export GROQ_API_KEY="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"
+```
+
+Or create a `.streamlit/secrets.toml` file with:
+```toml
+GROQ_API_KEY = "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"
+```
+"""
             else:
                 # Get conversation context
                 conversation_context = get_conversation_context(st.session_state.messages[:-1])
