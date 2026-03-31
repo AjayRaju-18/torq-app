@@ -1,3 +1,14 @@
+---
+title: TORQ - Mechanical Engineering Assistant
+emoji: 🤖
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+---
+
 # TORQ - Mechanical Engineering Assistant
 
 🤖 An AI-powered chatbot for mechanical engineering using RAG (Retrieval Augmented Generation) with GROQ LLM.
@@ -21,7 +32,7 @@
 
 1. Set environment variable `GROQ_API_KEY` with your GROQ API key
 2. Install dependencies: `pip install -r requirements.txt`
-3. Run: `python app_hf.py`
+3. Run: `python app.py`
 
 ## Deployment
 
