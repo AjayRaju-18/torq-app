@@ -45,11 +45,9 @@ def chat(message, history, use_rag):
     try:
         conv_history = []
         if history:
-            for msg in history:
-                if msg['role'] == 'user':
-                    conv_history.append({'role': 'user', 'content': msg['content']})
-                elif msg['role'] == 'assistant':
-                    conv_history.append({'role': 'assistant', 'content': msg['content']})
+            for human, assistant in history:
+                conv_history.append({'role': 'user', 'content': human})
+                conv_history.append({'role': 'assistant', 'content': assistant})
         
         if use_rag:
             result = torq_model.generate_response(message, conv_history)
@@ -59,13 +57,11 @@ def chat(message, history, use_rag):
         else:
             response = torq_model.generate_chat_response(message, conv_history)
         
-        history.append({'role': 'user', 'content': message})
-        history.append({'role': 'assistant', 'content': response})
+        history.append([message, response])
         return history
     
     except Exception as e:
-        history.append({'role': 'user', 'content': message})
-        history.append({'role': 'assistant', 'content': f"Error: {str(e)}"})
+        history.append([message, f"Error: {str(e)}"])
         return history
 
 # Create Gradio interface
@@ -97,7 +93,7 @@ with gr.Blocks() as demo:
         
         with gr.Column(scale=2):
             gr.Markdown("### 💬 Chat")
-            chatbot = gr.Chatbot(type="messages", height=500)
+            chatbot = gr.Chatbot(height=500)
             msg = gr.Textbox(
                 label="Your message",
                 placeholder="Ask about mechanical engineering...",
