@@ -42,16 +42,18 @@ def upload_pdf(file):
         return f"❌ Error: {str(e)}"
 
 def chat(message, history, use_rag):
-    """Chat with TORQ - simple list format for compatibility"""
+    """Chat with TORQ - messages format for Gradio 6.x"""
     if not message or not message.strip():
         return history
     
     try:
-        # Convert history to conversation format
+        # Convert history to conversation format for the model
         conv_history = []
         if history:
             for item in history:
-                if isinstance(item, (list, tuple)) and len(item) == 2:
+                if isinstance(item, dict) and 'role' in item and 'content' in item:
+                    conv_history.append(item)
+                elif isinstance(item, (list, tuple)) and len(item) == 2:
                     conv_history.append({'role': 'user', 'content': item[0]})
                     conv_history.append({'role': 'assistant', 'content': item[1]})
         
@@ -64,16 +66,35 @@ def chat(message, history, use_rag):
         else:
             response = torq_model.generate_chat_response(message, conv_history)
         
-        # Return as simple list of [user, bot] pairs
-        new_history = list(history) if history else []
-        new_history.append([message, response])
+        # Return in messages format (dict with role and content)
+        new_history = []
+        if history:
+            for item in history:
+                if isinstance(item, dict):
+                    new_history.append(item)
+                elif isinstance(item, (list, tuple)) and len(item) == 2:
+                    new_history.append({'role': 'user', 'content': item[0]})
+                    new_history.append({'role': 'assistant', 'content': item[1]})
+        
+        new_history.append({'role': 'user', 'content': message})
+        new_history.append({'role': 'assistant', 'content': response})
         
         return new_history
     
     except Exception as e:
         error_msg = f"Error: {str(e)}"
         new_history = list(history) if history else []
-        new_history.append([message, error_msg])
+        if isinstance(new_history, list) and len(new_history) > 0 and not isinstance(new_history[0], dict):
+            # Convert to dict format
+            converted = []
+            for item in new_history:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    converted.append({'role': 'user', 'content': item[0]})
+                    converted.append({'role': 'assistant', 'content': item[1]})
+            new_history = converted
+        
+        new_history.append({'role': 'user', 'content': message})
+        new_history.append({'role': 'assistant', 'content': error_msg})
         return new_history
 
 # Custom CSS for ChatGPT-like dark theme
@@ -138,7 +159,10 @@ with gr.Blocks(css=custom_css, title="TORQ") as demo:
         
         with gr.Column(scale=2):
             gr.Markdown("### 💬 Chat")
-            chatbot = gr.Chatbot(height=500)
+            chatbot = gr.Chatbot(
+                height=500,
+                type="messages"
+            )
             msg = gr.Textbox(
                 label="Your message",
                 placeholder="Ask about mechanical engineering...",
