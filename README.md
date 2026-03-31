@@ -2,6 +2,8 @@
 
 TORQ is a specialized mechanical engineering assistant powered by GROQ's LLM and trained on mechanical engineering textbooks using RAG (Retrieval Augmented Generation).
 
+Version: 1.0.1
+
 ## Features
 
 - 🤖 ChatGPT-like web interface
