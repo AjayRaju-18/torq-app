@@ -1,14 +1,27 @@
 import sys
 import importlib.util
+import types
 
 # Patch audioop for Python 3.13 compatibility before importing gradio
 try:
     import audioop
 except ModuleNotFoundError:
-    # Create a dummy audioop module for pydub
-    import types
     audioop = types.ModuleType('audioop')
     sys.modules['audioop'] = audioop
+
+# Patch gradio-client json_schema_to_python_type before importing gradio
+try:
+    from gradio_client import utils as client_utils
+    original_json_schema = client_utils.json_schema_to_python_type
+    
+    def patched_json_schema(schema, defs=None):
+        if isinstance(schema, bool):
+            return "bool"
+        return original_json_schema(schema, defs)
+    
+    client_utils.json_schema_to_python_type = patched_json_schema
+except:
+    pass
 
 import gradio as gr
 import os
