@@ -3,4 +3,4 @@ pypdf2
 chromadb
 sentence-transformers
 python-dotenv
-gradio
+gradio==4.44.0
