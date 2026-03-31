@@ -47,7 +47,7 @@ def upload_pdf():
         
         # Process PDF and add to vector store
         text = pdf_processor.extract_text_from_pdf(filepath)
-        chunks = pdf_processor.text_splitter.split_text(text)
+        chunks = pdf_processor.split_text(text)
         
         documents = []
         for i, chunk in enumerate(chunks):

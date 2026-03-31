@@ -1,15 +1,28 @@
 from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from config import CHUNK_SIZE, CHUNK_OVERLAP
 import os
 
 class PDFProcessor:
     def __init__(self):
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-            length_function=len
-        )
+        self.chunk_size = CHUNK_SIZE
+        self.chunk_overlap = CHUNK_OVERLAP
+    
+    def split_text(self, text):
+        """Split text into chunks with overlap"""
+        chunks = []
+        start = 0
+        text_length = len(text)
+        
+        while start < text_length:
+            end = start + self.chunk_size
+            chunk = text[start:end]
+            
+            if chunk:
+                chunks.append(chunk)
+            
+            start += self.chunk_size - self.chunk_overlap
+        
+        return chunks
     
     def extract_text_from_pdf(self, pdf_path):
         """Extract text from a single PDF file"""
@@ -33,7 +46,7 @@ class PDFProcessor:
             print(f"Processing: {pdf_file}")
             
             text = self.extract_text_from_pdf(pdf_path)
-            chunks = self.text_splitter.split_text(text)
+            chunks = self.split_text(text)
             
             for i, chunk in enumerate(chunks):
                 documents.append({
