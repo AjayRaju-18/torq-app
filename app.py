@@ -182,174 +182,228 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Perplexity-like UI
+# ChatGPT-like CSS
 st.markdown("""
 <style>
-    /* Import Google Fonts */
+    /* Import fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* Global Styles */
+    /* Global styles */
     .main {
         font-family: 'Inter', sans-serif;
-    }
-    
-    /* Header Styles */
-    .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        text-align: center;
-        color: white;
-    }
-    
-    .main-title {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin: 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .main-subtitle {
-        font-size: 1.1rem;
-        font-weight: 300;
-        margin-top: 0.5rem;
-        opacity: 0.9;
-    }
-    
-    /* Mode Selection Cards */
-    .mode-card {
-        background: white;
-        border: 2px solid #e1e5e9;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    
-    .mode-card:hover {
-        border-color: #667eea;
-        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
-        transform: translateY(-2px);
-    }
-    
-    .mode-card.active {
-        border-color: #667eea;
-        background: linear-gradient(135deg, #f8f9ff 0%, #e8edff 100%);
-    }
-    
-    .mode-title {
-        font-size: 1.3rem;
-        font-weight: 600;
-        color: #2d3748;
-        margin-bottom: 0.5rem;
-    }
-    
-    .mode-description {
-        color: #718096;
-        font-size: 0.95rem;
-        line-height: 1.5;
-    }
-    
-    .mode-icon {
-        font-size: 2rem;
-        margin-bottom: 1rem;
-    }
-    
-    /* Chat Interface */
-    .chat-container {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-top: 1rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-    
-    /* Sidebar Styles */
-    .sidebar-section {
-        background: #f8fafc;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border: 1px solid #e2e8f0;
-    }
-    
-    .sidebar-title {
-        font-weight: 600;
-        color: #2d3748;
-        margin-bottom: 0.5rem;
-        font-size: 1.1rem;
-    }
-    
-    /* Chat History Styles */
-    .chat-history-item {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 0.75rem;
-        margin-bottom: 0.5rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    .chat-history-item:hover {
-        border-color: #667eea;
-        background: #f8f9ff;
-    }
-    
-    .chat-history-title {
-        font-weight: 500;
-        color: #2d3748;
-        font-size: 0.9rem;
-        margin-bottom: 0.25rem;
-    }
-    
-    .chat-history-time {
-        color: #718096;
-        font-size: 0.75rem;
-    }
-    
-    /* Status Indicators */
-    .status-indicator {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        margin: 0.25rem 0;
-    }
-    
-    .status-personal {
-        background: #e6fffa;
-        color: #234e52;
-        border: 1px solid #81e6d9;
-    }
-    
-    .status-educational {
-        background: #fef5e7;
-        color: #744210;
-        border: 1px solid #f6e05e;
+        background-color: #ffffff;
     }
     
     /* Hide Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    .stDeployButton {visibility: hidden;}
     
-    /* Custom button styles */
-    .stButton > button {
+    /* Main header */
+    .chat-header {
+        text-align: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+    
+    .chat-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #374151;
+        margin: 0;
+    }
+    
+    /* Mode selector (like ChatGPT model selector) */
+    .mode-selector {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 1rem 0;
+        gap: 0.5rem;
+    }
+    
+    .mode-dropdown {
+        background: #f9fafb;
+        border: 1px solid #d1d5db;
         border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        color: #374151;
+        cursor: pointer;
+        min-width: 200px;
+        text-align: center;
+    }
+    
+    .mode-dropdown:hover {
+        background: #f3f4f6;
+    }
+    
+    /* Chat container */
+    .chat-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 1rem;
+    }
+    
+    /* Input area */
+    .input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid #e5e7eb;
+        padding: 1rem;
+        z-index: 1000;
+    }
+    
+    .input-wrapper {
+        max-width: 800px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    /* Sidebar styles */
+    .sidebar-header {
+        padding: 1rem 0;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+    
+    .sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    .new-chat-btn {
+        width: 100%;
+        background: #10b981;
+        color: white;
         border: none;
+        border-radius: 6px;
+        padding: 0.75rem;
         font-weight: 500;
-        transition: all 0.2s ease;
+        cursor: pointer;
+        margin-bottom: 1rem;
+    }
+    
+    .new-chat-btn:hover {
+        background: #059669;
+    }
+    
+    /* Chat history items */
+    .chat-item {
+        padding: 0.75rem;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+    
+    .chat-item:hover {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+    
+    .chat-item-title {
+        font-size: 0.9rem;
+        color: #374151;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .chat-item-meta {
+        font-size: 0.75rem;
+        color: #6b7280;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    /* PDF upload section */
+    .pdf-section {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .pdf-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Status indicators */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    .status-personal {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    
+    .status-educational {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    
+    /* Message styling */
+    .stChatMessage {
+        max-width: 100%;
+    }
+    
+    /* Bottom padding for fixed input */
+    .main-content {
+        padding-bottom: 120px;
+    }
+    
+    /* Custom buttons */
+    .stButton > button {
+        border-radius: 6px;
+        font-weight: 500;
+        border: 1px solid #d1d5db;
+        background: white;
+        color: #374151;
     }
     
     .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        background: #f9fafb;
+        border-color: #9ca3af;
+    }
+    
+    /* File uploader styling */
+    .stFileUploader {
+        border: 1px dashed #d1d5db;
+        border-radius: 6px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    /* Selectbox styling */
+    .stSelectbox > div > div {
+        background: #f9fafb;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -373,90 +427,41 @@ if 'chat_histories' not in st.session_state:
 
 # Header
 st.markdown("""
-<div class="main-header">
-    <h1 class="main-title">🤖 TORQ</h1>
-    <p class="main-subtitle">Advanced Mechanical Engineering AI Assistant</p>
+<div class="chat-header">
+    <h1 class="chat-title">TORQ</h1>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar - ChatGPT style
 with st.sidebar:
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-title">📄 Document Management</div>', unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader("Upload PDF for Educational Mode", type=['pdf'])
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if uploaded_file and st.button("📚 Process PDF", type="primary"):
-            with st.spinner("Processing PDF..."):
-                temp_path = f"temp_{uploaded_file.name}"
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                text = extract_text_from_pdf(temp_path)
-                chunks = split_text(text)
-                
-                documents = []
-                for i, chunk in enumerate(chunks):
-                    documents.append({
-                        'content': chunk,
-                        'metadata': {'source': uploaded_file.name, 'chunk_id': i}
-                    })
-                
-                st.session_state.vector_store.add_documents(documents)
-                os.remove(temp_path)
-                st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
-    
-    with col2:
-        if st.button("🗑️ Clear PDFs", type="secondary"):
-            cleared = st.session_state.vector_store.clear_all()
-            if cleared:
-                st.success("🗑️ All PDF content cleared")
-                st.rerun()
-    
-    # PDF Status
-    if len(st.session_state.vector_store.documents) > 0:
-        st.success(f"📚 {len(st.session_state.vector_store.documents)} document chunks loaded")
-    else:
-        st.warning("⚠️ No PDFs uploaded for Educational Mode")
-    
+    # New Chat Button
+    st.markdown('<div class="sidebar-header">', unsafe_allow_html=True)
+    if st.button("+ New chat", key="new_chat", help="Start a new conversation"):
+        # Save current chat if it has messages
+        if st.session_state.messages:
+            title = generate_chat_title(st.session_state.messages[0]["content"])
+            save_chat_history(
+                st.session_state.current_chat_id,
+                title,
+                st.session_state.messages,
+                st.session_state.current_mode
+            )
+        
+        # Start new chat
+        st.session_state.messages = []
+        st.session_state.current_chat_id = str(uuid.uuid4())
+        st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Chat History Section
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-title">💬 Chat History</div>', unsafe_allow_html=True)
+    # Chat History
+    st.markdown('<div class="sidebar-title">Recent chats</div>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🆕 New Chat", type="primary"):
-            # Save current chat if it has messages
-            if st.session_state.messages:
-                title = generate_chat_title(st.session_state.messages[0]["content"])
-                save_chat_history(
-                    st.session_state.current_chat_id,
-                    title,
-                    st.session_state.messages,
-                    st.session_state.current_mode
-                )
-            
-            # Start new chat
-            st.session_state.messages = []
-            st.session_state.current_chat_id = str(uuid.uuid4())
-            st.rerun()
-    
-    with col2:
-        if st.button("🗑️ Clear All", type="secondary"):
-            st.session_state.chat_histories = []
-            st.session_state.messages = []
-            st.success("All chat history cleared")
-            st.rerun()
-    
-    # Display chat history
     if st.session_state.chat_histories:
-        for chat in st.session_state.chat_histories[:10]:  # Show last 10 chats
-            mode_emoji = "🤖" if chat['mode'] == "personal" else "📚"
-            if st.button(f"{mode_emoji} {chat['title']}", key=f"chat_{chat['id']}", help=f"Created: {chat['created']}"):
+        for chat in st.session_state.chat_histories[:15]:  # Show last 15 chats
+            mode_icon = "🤖" if chat['mode'] == "personal" else "📚"
+            
+            # Create clickable chat item
+            if st.button(f"{chat['title']}", key=f"chat_{chat['id']}", help=f"{mode_icon} {chat['created']}"):
                 # Save current chat before switching
                 if st.session_state.messages:
                     current_title = generate_chat_title(st.session_state.messages[0]["content"])
@@ -473,57 +478,87 @@ with st.sidebar:
                 st.session_state.current_chat_id = chat['id']
                 st.rerun()
     else:
-        st.info("No previous chats")
+        st.markdown('<div style="color: #6b7280; font-size: 0.9rem; padding: 1rem; text-align: center;">No conversations yet</div>', unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Clear all chats
+    if st.session_state.chat_histories:
+        st.markdown("---")
+        if st.button("Clear conversations", type="secondary"):
+            st.session_state.chat_histories = []
+            st.success("All conversations cleared")
+            st.rerun()
 
-# Mode Selection
-col1, col2 = st.columns(2)
+# Main content area
+st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
-with col1:
-    personal_active = "active" if st.session_state.current_mode == "personal" else ""
-    if st.button("🤖 Personal Assistant", key="personal_mode", help="General AI assistant for any questions"):
-        st.session_state.current_mode = "personal"
-        st.rerun()
-    
-    st.markdown(f"""
-    <div class="mode-card {personal_active}">
-        <div class="mode-icon">🤖</div>
-        <div class="mode-title">Personal Assistant</div>
-        <div class="mode-description">
-            General AI assistant powered by advanced language models. 
-            Ask anything about mechanical engineering, get explanations, 
-            solve problems, and have natural conversations.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# Mode selector (like ChatGPT model dropdown)
+mode_options = {
+    "🤖 Personal Assistant": "personal",
+    "📚 Educational Mode": "educational"
+}
 
-with col2:
-    educational_active = "active" if st.session_state.current_mode == "educational" else ""
-    if st.button("📚 Educational Mode", key="educational_mode", help="Learn from your uploaded PDF documents"):
-        st.session_state.current_mode = "educational"
-        st.rerun()
-    
-    st.markdown(f"""
-    <div class="mode-card {educational_active}">
-        <div class="mode-icon">📚</div>
-        <div class="mode-title">Educational Mode</div>
-        <div class="mode-description">
-            Learn from your uploaded PDF documents. Get detailed explanations 
-            based on your study materials, textbooks, and reference documents 
-            with contextual understanding.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+current_mode_display = "🤖 Personal Assistant" if st.session_state.current_mode == "personal" else "📚 Educational Mode"
 
-# Current Mode Status
+selected_mode = st.selectbox(
+    "Choose mode:",
+    options=list(mode_options.keys()),
+    index=0 if st.session_state.current_mode == "personal" else 1,
+    key="mode_selector",
+    label_visibility="collapsed"
+)
+
+# Update mode if changed
+if mode_options[selected_mode] != st.session_state.current_mode:
+    st.session_state.current_mode = mode_options[selected_mode]
+    st.rerun()
+
+# Status indicator
 if st.session_state.current_mode == "personal":
-    st.markdown('<div class="status-indicator status-personal">🤖 Personal Assistant Mode Active</div>', unsafe_allow_html=True)
+    st.markdown('<div class="status-badge status-personal">🤖 Personal Assistant Active</div>', unsafe_allow_html=True)
 else:
     if len(st.session_state.vector_store.documents) > 0:
-        st.markdown('<div class="status-indicator status-educational">📚 Educational Mode Active - PDF Loaded</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-badge status-educational">📚 Educational Mode - PDF Loaded</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-indicator status-educational">📚 Educational Mode Active - Upload PDF to Start</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-badge status-educational">📚 Educational Mode - No PDF Loaded</div>', unsafe_allow_html=True)
+
+# PDF Upload for Educational Mode (near search area)
+if st.session_state.current_mode == "educational":
+    with st.expander("📄 Upload PDF for Educational Mode", expanded=len(st.session_state.vector_store.documents) == 0):
+        uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            if uploaded_file and st.button("Process PDF", type="primary"):
+                with st.spinner("Processing PDF..."):
+                    temp_path = f"temp_{uploaded_file.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    text = extract_text_from_pdf(temp_path)
+                    chunks = split_text(text)
+                    
+                    documents = []
+                    for i, chunk in enumerate(chunks):
+                        documents.append({
+                            'content': chunk,
+                            'metadata': {'source': uploaded_file.name, 'chunk_id': i}
+                        })
+                    
+                    st.session_state.vector_store.add_documents(documents)
+                    os.remove(temp_path)
+                    st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
+                    st.rerun()
+        
+        with col2:
+            if len(st.session_state.vector_store.documents) > 0 and st.button("Clear PDF", type="secondary"):
+                cleared = st.session_state.vector_store.clear_all()
+                if cleared:
+                    st.success("PDF content cleared")
+                    st.rerun()
+        
+        # Show PDF status
+        if len(st.session_state.vector_store.documents) > 0:
+            st.info(f"📚 {len(st.session_state.vector_store.documents)} document chunks loaded")
 
 # Chat Interface
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -654,3 +689,4 @@ RESPONSE (considering our conversation history):"""
                 )
 
 st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)  # Close main-content
