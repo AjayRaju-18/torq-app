@@ -54,14 +54,22 @@ class SimpleVectorStore:
     
     def search(self, query, top_k=3):
         if not self.documents or self.document_vectors is None:
-            return []
+            return [], []
         
         query = re.sub(r'[^a-zA-Z0-9\s]', ' ', query.lower())
         query_vector = self.vectorizer.transform([query])
         similarities = cosine_similarity(query_vector, self.document_vectors)[0]
         top_indices = np.argsort(similarities)[-top_k:][::-1]
         
-        return [self.documents[i] for i in top_indices if similarities[i] > 0.01]
+        # Filter results with similarity > 0.01 and return both content and metadata
+        results = []
+        sources = []
+        for i in top_indices:
+            if similarities[i] > 0.01:
+                results.append(self.documents[i])
+                sources.append(self.metadata[i].get('source', 'Unknown'))
+        
+        return results, sources
 
 # Simple GROQ client
 def call_groq(messages, api_key):
@@ -123,6 +131,12 @@ with st.sidebar:
     
     use_rag = st.checkbox("Enable RAG Mode", value=True)
     
+    # Show PDF status
+    if len(st.session_state.vector_store.documents) > 0:
+        st.success(f"✅ {len(st.session_state.vector_store.documents)} document chunks loaded")
+    else:
+        st.warning("⚠️ No PDFs uploaded. RAG mode will use general knowledge only.")
+    
     if st.button("Clear Chat"):
         st.session_state.messages = []
         st.rerun()
@@ -144,17 +158,29 @@ if prompt := st.chat_input("Ask about mechanical engineering..."):
                 response = "Please set GROQ_API_KEY in Streamlit secrets"
             else:
                 if use_rag:
-                    context_docs = st.session_state.vector_store.search(prompt)
+                    context_docs, sources = st.session_state.vector_store.search(prompt)
                     if context_docs:
                         context = "\n\n".join(context_docs[:3])
-                        full_prompt = f"Context: {context}\n\nQuestion: {prompt}"
+                        full_prompt = f"""Based on the following context from uploaded documents, answer the question. If the context doesn't contain enough information, say so and provide general knowledge.
+
+Context from uploaded PDF:
+{context}
+
+Question: {prompt}
+
+Answer based on the context above:"""
+                        
+                        # Show which documents are being used
+                        if sources:
+                            st.info(f"📚 Using content from: {', '.join(set(sources))}")
                     else:
-                        full_prompt = prompt
+                        full_prompt = f"No relevant content found in uploaded PDFs. Please answer based on general mechanical engineering knowledge: {prompt}"
+                        st.warning("⚠️ No relevant content found in uploaded PDFs. Answering from general knowledge.")
                 else:
                     full_prompt = prompt
                 
                 messages = [
-                    {"role": "system", "content": "You are TORQ, a mechanical engineering assistant."},
+                    {"role": "system", "content": "You are TORQ, a mechanical engineering assistant. When provided with context from documents, prioritize that information in your response. Always be clear about whether you're using uploaded document content or general knowledge."},
                     {"role": "user", "content": full_prompt}
                 ]
                 
