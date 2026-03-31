@@ -24,6 +24,7 @@ wheels/
 .env
 .venv
 torq_vectordb/
+torq_storage/
 uploads/
 *.db
 *.sqlite

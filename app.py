@@ -8,8 +8,114 @@ import PyPDF2
 import json
 from datetime import datetime
 import uuid
+import pickle
+import shutil
 
-# Simple PDF processor
+# Persistent storage functions
+def get_storage_path():
+    """Get the path for persistent storage"""
+    storage_dir = "torq_storage"
+    if not os.path.exists(storage_dir):
+        os.makedirs(storage_dir)
+    return storage_dir
+
+def save_vector_store(vector_store, filename="vector_store.pkl"):
+    """Save vector store to disk"""
+    storage_path = get_storage_path()
+    file_path = os.path.join(storage_path, filename)
+    
+    # Create a serializable version of the vector store
+    store_data = {
+        'documents': vector_store.documents,
+        'original_documents': vector_store.original_documents,
+        'metadata': vector_store.metadata,
+        'document_vectors': vector_store.document_vectors.toarray() if vector_store.document_vectors is not None else None,
+        'vectorizer_vocabulary': vector_store.vectorizer.vocabulary_ if hasattr(vector_store.vectorizer, 'vocabulary_') else None,
+        'vectorizer_params': {
+            'max_features': vector_store.vectorizer.max_features,
+            'stop_words': vector_store.vectorizer.stop_words,
+            'ngram_range': vector_store.vectorizer.ngram_range,
+            'min_df': vector_store.vectorizer.min_df,
+            'max_df': vector_store.vectorizer.max_df
+        }
+    }
+    
+    with open(file_path, 'wb') as f:
+        pickle.dump(store_data, f)
+    
+    return True
+
+def load_vector_store(filename="vector_store.pkl"):
+    """Load vector store from disk"""
+    storage_path = get_storage_path()
+    file_path = os.path.join(storage_path, filename)
+    
+    if not os.path.exists(file_path):
+        return None
+    
+    try:
+        with open(file_path, 'rb') as f:
+            store_data = pickle.load(f)
+        
+        # Recreate vector store
+        vector_store = SimpleVectorStore()
+        vector_store.documents = store_data['documents']
+        vector_store.original_documents = store_data['original_documents']
+        vector_store.metadata = store_data['metadata']
+        
+        # Recreate vectorizer with saved vocabulary
+        if store_data['vectorizer_vocabulary']:
+            vector_store.vectorizer = TfidfVectorizer(
+                vocabulary=store_data['vectorizer_vocabulary'],
+                **store_data['vectorizer_params']
+            )
+            
+            # Recreate document vectors
+            if store_data['document_vectors'] is not None:
+                from scipy.sparse import csr_matrix
+                vector_store.document_vectors = csr_matrix(store_data['document_vectors'])
+        
+        return vector_store
+    except Exception as e:
+        print(f"Error loading vector store: {e}")
+        return None
+
+def save_pdf_info(pdf_name, chunk_count):
+    """Save PDF information"""
+    storage_path = get_storage_path()
+    info_file = os.path.join(storage_path, "pdf_info.json")
+    
+    pdf_info = {
+        'name': pdf_name,
+        'chunk_count': chunk_count,
+        'upload_date': datetime.now().isoformat(),
+        'last_accessed': datetime.now().isoformat()
+    }
+    
+    with open(info_file, 'w') as f:
+        json.dump(pdf_info, f)
+
+def get_pdf_info():
+    """Get PDF information"""
+    storage_path = get_storage_path()
+    info_file = os.path.join(storage_path, "pdf_info.json")
+    
+    if not os.path.exists(info_file):
+        return None
+    
+    try:
+        with open(info_file, 'r') as f:
+            return json.load(f)
+    except:
+        return None
+
+def clear_persistent_storage():
+    """Clear all persistent storage"""
+    storage_path = get_storage_path()
+    if os.path.exists(storage_path):
+        shutil.rmtree(storage_path)
+        os.makedirs(storage_path)
+    return True
 def extract_text_from_pdf(file_path):
     text = ""
     with open(file_path, 'rb') as file:
@@ -58,6 +164,8 @@ class SimpleVectorStore:
             min_df=1,
             max_df=0.95
         )
+        # Also clear persistent storage
+        clear_persistent_storage()
         return True
     
     def add_documents(self, documents):
@@ -410,8 +518,13 @@ st.markdown("""
 
 # Initialize session state
 if 'vector_store' not in st.session_state:
-    st.session_state.vector_store = SimpleVectorStore()
-    st.session_state.vector_store.clear_all()
+    # Try to load existing vector store first
+    loaded_store = load_vector_store()
+    if loaded_store:
+        st.session_state.vector_store = loaded_store
+    else:
+        st.session_state.vector_store = SimpleVectorStore()
+        st.session_state.vector_store.clear_all()
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -424,6 +537,11 @@ if 'current_chat_id' not in st.session_state:
 
 if 'chat_histories' not in st.session_state:
     st.session_state.chat_histories = []
+
+if 'pdf_loaded' not in st.session_state:
+    # Check if there's a saved PDF
+    pdf_info = get_pdf_info()
+    st.session_state.pdf_loaded = pdf_info is not None
 
 # Header
 st.markdown("""
@@ -523,13 +641,28 @@ else:
 
 # PDF Upload for Educational Mode (near search area)
 if st.session_state.current_mode == "educational":
-    with st.expander("📄 Upload PDF for Educational Mode", expanded=len(st.session_state.vector_store.documents) == 0):
-        uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
+    # Check for existing PDF
+    pdf_info = get_pdf_info()
+    
+    if pdf_info:
+        # Show existing PDF info
+        st.success(f"📚 PDF Loaded: **{pdf_info['name']}** ({pdf_info['chunk_count']} chunks)")
+        st.info(f"📅 Uploaded: {datetime.fromisoformat(pdf_info['upload_date']).strftime('%Y-%m-%d %H:%M')}")
         
-        col1, col2 = st.columns([2, 1])
-        with col1:
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("🗑️ Remove PDF", type="secondary", help="Clear the current PDF and upload a new one"):
+                cleared = st.session_state.vector_store.clear_all()
+                if cleared:
+                    st.success("PDF removed successfully")
+                    st.rerun()
+    else:
+        # Show upload interface
+        with st.expander("📄 Upload PDF for Educational Mode", expanded=True):
+            uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
+            
             if uploaded_file and st.button("Process PDF", type="primary"):
-                with st.spinner("Processing PDF..."):
+                with st.spinner("Processing and saving PDF..."):
                     temp_path = f"temp_{uploaded_file.name}"
                     with open(temp_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
@@ -544,21 +677,17 @@ if st.session_state.current_mode == "educational":
                             'metadata': {'source': uploaded_file.name, 'chunk_id': i}
                         })
                     
+                    # Add documents to vector store
                     st.session_state.vector_store.add_documents(documents)
+                    
+                    # Save vector store and PDF info persistently
+                    save_vector_store(st.session_state.vector_store)
+                    save_pdf_info(uploaded_file.name, len(chunks))
+                    
                     os.remove(temp_path)
-                    st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
+                    st.success(f"✅ Processed and saved {len(chunks)} chunks from {uploaded_file.name}")
+                    st.info("📱 PDF will be available across all devices and app restarts!")
                     st.rerun()
-        
-        with col2:
-            if len(st.session_state.vector_store.documents) > 0 and st.button("Clear PDF", type="secondary"):
-                cleared = st.session_state.vector_store.clear_all()
-                if cleared:
-                    st.success("PDF content cleared")
-                    st.rerun()
-        
-        # Show PDF status
-        if len(st.session_state.vector_store.documents) > 0:
-            st.info(f"📚 {len(st.session_state.vector_store.documents)} document chunks loaded")
 
 # Chat Interface
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)

@@ -4,3 +4,4 @@ pypdf2
 scikit-learn
 numpy
 requests
+scipy
