@@ -130,14 +130,14 @@ def extract_text_from_pdf(file_path):
             text += page.extract_text()
     return text
 
-def split_text(text, chunk_size=800, overlap=100):
-    """Split text into overlapping chunks for better context preservation"""
+def split_text(text, chunk_size=500, overlap=50):
+    """Split text into smaller overlapping chunks for better context preservation and token management"""
     words = text.split()
     chunks = []
     
     for i in range(0, len(words), chunk_size - overlap):
         chunk_words = words[i:i + chunk_size]
-        if len(chunk_words) > 50:  # Only keep substantial chunks
+        if len(chunk_words) > 30:  # Only keep substantial chunks
             chunks.append(' '.join(chunk_words))
     
     return chunks
@@ -210,7 +210,7 @@ class SimpleVectorStore:
         
         return True
 
-    def search(self, query, top_k=5):
+    def search(self, query, top_k=3):  # Reduced from 5 to 3 for token management
         if not self.documents or self.document_vectors is None:
             return [], []
         
@@ -295,8 +295,8 @@ def generate_chat_title(first_message):
         return first_message[:47] + "..."
     return first_message
 
-def get_conversation_context(messages, max_context=5):
-    """Get recent conversation context for better responses"""
+def get_conversation_context(messages, max_context=3):
+    """Get recent conversation context for better responses (reduced for token management)"""
     if len(messages) <= 1:
         return ""
     
@@ -305,9 +305,17 @@ def get_conversation_context(messages, max_context=5):
     
     for msg in recent_messages:
         role = "Human" if msg["role"] == "user" else "Assistant"
-        context_parts.append(f"{role}: {msg['content']}")
+        # Truncate long messages to manage tokens
+        content = msg['content']
+        if len(content) > 200:
+            content = content[:200] + "..."
+        context_parts.append(f"{role}: {content}")
     
     return "\n".join(context_parts)
+def estimate_tokens(text):
+    """Rough estimation of tokens (1 token ≈ 4 characters for English)"""
+    return len(text) // 4
+
 def call_groq(messages, api_key):
     import requests
     
@@ -323,10 +331,20 @@ def call_groq(messages, api_key):
         'model': 'llama-3.1-8b-instant',
         'messages': messages,
         'temperature': 0.7,
-        'max_tokens': 1024
+        'max_tokens': 800  # Reduced from 1024 to manage token limits
     }
     
     try:
+        # Estimate total tokens
+        total_text = " ".join([msg['content'] for msg in messages])
+        estimated_tokens = estimate_tokens(total_text)
+        
+        # If estimated tokens are too high, truncate the content
+        if estimated_tokens > 5000:  # Leave buffer for response
+            # Truncate the user message if it's too long
+            if len(messages) > 1 and len(messages[-1]['content']) > 2000:
+                messages[-1]['content'] = messages[-1]['content'][:2000] + "...[truncated for token limit]"
+        
         response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
                                headers=headers, json=data, timeout=30)
         
@@ -847,67 +865,63 @@ GROQ_API_KEY = "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"
                         sources = []
                     
                     if context_docs:
-                        context = "\n\n---RELEVANT CONTENT---\n\n".join(context_docs[:4])
+                        # Limit context to manage tokens (max ~2000 words)
+                        context = "\n\n---SECTION---\n\n".join(context_docs[:2])  # Reduced from 4 to 2
                         
-                        full_prompt = f"""You are TORQ, a mechanical engineering educational assistant. Based on the PDF content and conversation history, answer the user's question.
+                        # Truncate context if too long
+                        if len(context) > 3000:
+                            context = context[:3000] + "...[truncated for length]"
+                        
+                        # Truncate conversation context for token management
+                        if len(conversation_context) > 500:
+                            conversation_context = conversation_context[:500] + "...[truncated]"
+                        
+                        full_prompt = f"""You are TORQ, a mechanical engineering educational assistant. Based on the PDF content, answer the user's question concisely.
 
-CONVERSATION HISTORY:
+RECENT CONVERSATION:
 {conversation_context}
 
-INSTRUCTIONS:
-- Use the PDF content as your primary knowledge source
-- Consider the conversation history for context and continuity
-- Extract core meaning and concepts from the PDF content
-- Provide educational explanations with step-by-step reasoning
-- Connect concepts from the PDF to give comprehensive answers
-- Reference previous parts of our conversation when relevant
-- Always indicate that your answer is based on the uploaded educational material
-
-PDF CONTENT FROM UPLOADED DOCUMENT:
+PDF CONTENT:
 {context}
 
-CURRENT QUESTION: {prompt}
+QUESTION: {prompt}
 
-EDUCATIONAL RESPONSE (based on PDF content and conversation):"""
+CONCISE ANSWER (based on PDF):"""
                         
                         unique_sources = list(set(sources)) if sources else []
-                        st.info(f"📖 Analyzing content from: {', '.join(unique_sources)} | Found {len(context_docs)} relevant sections")
+                        st.info(f"📖 Analyzing: {', '.join(unique_sources)} | {len(context_docs)} sections")
                         
                     else:
-                        full_prompt = f"""Based on our conversation history:
-{conversation_context}
+                        full_prompt = f"""Based on our conversation:
+{conversation_context[:300]}
 
-The uploaded PDF doesn't contain information relevant to your question: "{prompt}". 
+The PDF doesn't contain relevant information for: "{prompt}". 
 
-Please ask questions related to the content in your uploaded educational material, or switch to Personal Assistant mode for general questions."""
-                        st.warning("🔍 No relevant content found in the uploaded PDF for this question.")
+Please ask about content in your uploaded PDF, or switch to Personal Assistant mode."""
+                        st.warning("🔍 No relevant content found in PDF.")
                 
                 elif st.session_state.current_mode == "educational" and len(st.session_state.vector_store.documents) == 0:
                     # Educational Mode but no PDFs
                     full_prompt = "Please upload a PDF document first to use Educational Mode, or switch to Personal Assistant mode for general assistance."
-                    st.error("� Educational Mode requires a PDF to be uploaded first.")
+                    st.error("📄 Educational Mode requires a PDF upload.")
                 
                 else:
                     # Personal Assistant Mode - ChatGPT-like with conversation memory
-                    full_prompt = f"""You are TORQ, an intelligent and helpful AI assistant specializing in mechanical engineering. You have extensive knowledge and maintain conversation continuity.
+                    # Truncate conversation context for token management
+                    if len(conversation_context) > 400:
+                        conversation_context = conversation_context[:400] + "...[truncated]"
+                    
+                    full_prompt = f"""You are TORQ, an AI assistant specializing in mechanical engineering. Provide concise, helpful responses.
 
-CONVERSATION HISTORY:
+RECENT CONVERSATION:
 {conversation_context}
 
-INSTRUCTIONS:
-- Consider our previous conversation for context and continuity
-- Reference earlier parts of our discussion when relevant
-- Provide detailed, educational explanations
-- Be conversational and engaging like ChatGPT
-- Cover all areas of mechanical engineering comprehensively
-- Build upon previous topics we've discussed
+QUESTION: {prompt}
 
-CURRENT QUESTION: {prompt}
-
-RESPONSE (considering our conversation history):"""
+RESPONSE:"""
                     
                     mode_emoji = "🤖" if st.session_state.current_mode == "personal" else "📚"
-                    st.info(f"{mode_emoji} Personal Assistant Mode - Answering with conversation memory")
+                    st.info(f"{mode_emoji} Personal Assistant Mode")
                 
                 # Prepare messages for API call
                 system_message = "You are TORQ, a helpful AI assistant specializing in mechanical engineering. Maintain conversation continuity and provide educational, detailed responses."
