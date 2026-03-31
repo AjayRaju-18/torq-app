@@ -1,7 +1,9 @@
+# Vector store and ML dependencies
 python-dotenv
 groq
 pypdf2
 sentence-transformers==2.2.2
 numpy==1.24.3
-streamlit
 faiss-cpu
+# Web framework
+streamlit
