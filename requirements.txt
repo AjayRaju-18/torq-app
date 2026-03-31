@@ -4,6 +4,6 @@ groq
 pypdf2
 sentence-transformers==2.2.2
 numpy==1.24.3
-faiss-cpu
+scikit-learn
 # Web framework
 streamlit
