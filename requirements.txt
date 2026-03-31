@@ -2,6 +2,6 @@ python-dotenv
 groq
 pypdf2
 sentence-transformers==2.2.2
-chromadb==0.4.15
 numpy==1.24.3
 streamlit
+faiss-cpu
