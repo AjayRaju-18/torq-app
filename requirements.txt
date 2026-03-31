@@ -2,5 +2,5 @@
 streamlit
 pypdf2
 scikit-learn
-numpy==1.21.6
+numpy
 requests
