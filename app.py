@@ -63,17 +63,23 @@ def load_vector_store(filename="vector_store.pkl"):
         vector_store.original_documents = store_data['original_documents']
         vector_store.metadata = store_data['metadata']
         
-        # Recreate vectorizer with saved vocabulary
-        if store_data['vectorizer_vocabulary']:
+        # Recreate vectorizer with saved vocabulary and fit it
+        if store_data['vectorizer_vocabulary'] and store_data['documents']:
             vector_store.vectorizer = TfidfVectorizer(
                 vocabulary=store_data['vectorizer_vocabulary'],
                 **store_data['vectorizer_params']
             )
             
+            # Fit the vectorizer with the loaded documents
+            vector_store.vectorizer.fit(vector_store.documents)
+            
             # Recreate document vectors
             if store_data['document_vectors'] is not None:
                 from scipy.sparse import csr_matrix
                 vector_store.document_vectors = csr_matrix(store_data['document_vectors'])
+            else:
+                # If document vectors are missing, recreate them
+                vector_store.document_vectors = vector_store.vectorizer.transform(vector_store.documents)
         
         return vector_store
     except Exception as e:
@@ -182,14 +188,56 @@ class SimpleVectorStore:
         if self.documents:
             self.document_vectors = self.vectorizer.fit_transform(self.documents)
     
+    def validate_and_repair(self):
+        """Validate vector store state and repair if needed"""
+        if not self.documents:
+            return True
+        
+        # Check if vectorizer is properly fitted
+        try:
+            _ = self.vectorizer.vocabulary_
+            # Try a test transform
+            test_vector = self.vectorizer.transform(["test"])
+        except (AttributeError, ValueError):
+            # Vectorizer not fitted or corrupted, refit
+            print("Repairing vector store: refitting vectorizer...")
+            self.document_vectors = self.vectorizer.fit_transform(self.documents)
+        
+        # Check if document vectors exist and match document count
+        if self.document_vectors is None or self.document_vectors.shape[0] != len(self.documents):
+            print("Repairing vector store: regenerating document vectors...")
+            self.document_vectors = self.vectorizer.fit_transform(self.documents)
+        
+        return True
+
     def search(self, query, top_k=5):
         if not self.documents or self.document_vectors is None:
             return [], []
         
+        # Check if vectorizer is fitted, if not, fit it
+        try:
+            # Test if vectorizer is fitted by trying to get vocabulary
+            _ = self.vectorizer.vocabulary_
+        except AttributeError:
+            # Vectorizer not fitted, fit it with current documents
+            if self.documents:
+                self.document_vectors = self.vectorizer.fit_transform(self.documents)
+            else:
+                return [], []
+        
         processed_query = re.sub(r'[^a-zA-Z0-9\s]', ' ', query.lower())
         processed_query = ' '.join(processed_query.split())
         
-        query_vector = self.vectorizer.transform([processed_query])
+        try:
+            query_vector = self.vectorizer.transform([processed_query])
+        except Exception as e:
+            # If transform fails, refit the vectorizer
+            if self.documents:
+                self.document_vectors = self.vectorizer.fit_transform(self.documents)
+                query_vector = self.vectorizer.transform([processed_query])
+            else:
+                return [], []
+        
         similarities = cosine_similarity(query_vector, self.document_vectors)[0]
         
         top_indices = np.argsort(similarities)[-top_k:][::-1]
@@ -557,6 +605,8 @@ if 'vector_store' not in st.session_state:
     loaded_store = load_vector_store()
     if loaded_store:
         st.session_state.vector_store = loaded_store
+        # Validate and repair if needed
+        st.session_state.vector_store.validate_and_repair()
     else:
         st.session_state.vector_store = SimpleVectorStore()
         st.session_state.vector_store.clear_all()
@@ -782,7 +832,14 @@ GROQ_API_KEY = "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"
                 
                 if st.session_state.current_mode == "educational" and len(st.session_state.vector_store.documents) > 0:
                     # Educational Mode - Use PDF content with conversation context
-                    search_results = st.session_state.vector_store.search(prompt)
+                    try:
+                        # Validate vector store before searching
+                        st.session_state.vector_store.validate_and_repair()
+                        search_results = st.session_state.vector_store.search(prompt)
+                    except Exception as e:
+                        st.error(f"Error searching PDF content: {str(e)}")
+                        search_results = ([], [])
+                    
                     if isinstance(search_results, tuple) and len(search_results) == 2:
                         context_docs, sources = search_results
                     else:
