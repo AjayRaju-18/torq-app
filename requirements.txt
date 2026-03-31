@@ -1,11 +1,9 @@
-# Vector store and ML dependencies
+# Core dependencies
 python-dotenv
 groq
 pypdf2
-sentence-transformers==2.0.0
-transformers==4.18.0
-torch==1.11.0
 numpy==1.21.6
 scikit-learn
+requests
 # Web framework
 streamlit
