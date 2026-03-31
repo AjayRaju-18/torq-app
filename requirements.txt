@@ -1,6 +1,5 @@
-groq>=1.1.0
-gradio==4.44.0
-pypdf2>=3.0.0
-chromadb>=0.4.0
-sentence-transformers>=2.3.0
-python-dotenv>=1.0.0
+groq
+pypdf2
+chromadb
+sentence-transformers
+python-dotenv
