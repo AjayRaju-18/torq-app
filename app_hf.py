@@ -42,7 +42,7 @@ def upload_pdf(file):
         return f"❌ Error: {str(e)}"
 
 def chat(message, history, use_rag):
-    """Chat with TORQ - Gradio 6.x compatible"""
+    """Chat with TORQ - simple list format for compatibility"""
     if not message or not message.strip():
         return history
     
@@ -51,11 +51,7 @@ def chat(message, history, use_rag):
         conv_history = []
         if history:
             for item in history:
-                if isinstance(item, dict):
-                    # Already in correct format
-                    conv_history.append(item)
-                elif isinstance(item, (list, tuple)) and len(item) == 2:
-                    # Convert [user, assistant] to proper format
+                if isinstance(item, (list, tuple)) and len(item) == 2:
                     conv_history.append({'role': 'user', 'content': item[0]})
                     conv_history.append({'role': 'assistant', 'content': item[1]})
         
@@ -68,69 +64,54 @@ def chat(message, history, use_rag):
         else:
             response = torq_model.generate_chat_response(message, conv_history)
         
-        # Return in Gradio 6.x format
-        new_history = []
-        if history:
-            for item in history:
-                if isinstance(item, dict):
-                    new_history.append(item)
-                elif isinstance(item, (list, tuple)) and len(item) == 2:
-                    new_history.append({'role': 'user', 'content': item[0]})
-                    new_history.append({'role': 'assistant', 'content': item[1]})
-        
-        new_history.append({'role': 'user', 'content': message})
-        new_history.append({'role': 'assistant', 'content': response})
+        # Return as simple list of [user, bot] pairs
+        new_history = list(history) if history else []
+        new_history.append([message, response])
         
         return new_history
     
     except Exception as e:
         error_msg = f"Error: {str(e)}"
         new_history = list(history) if history else []
-        new_history.append({'role': 'user', 'content': message})
-        new_history.append({'role': 'assistant', 'content': error_msg})
+        new_history.append([message, error_msg])
         return new_history
 
 # Custom CSS for ChatGPT-like dark theme
 custom_css = """
-#chatbot {
-    background-color: #343541;
+.gradio-container {
+    background: linear-gradient(to bottom, #202123, #343541) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.contain {
+    background-color: transparent !important;
+}
+#component-0, #component-1, #component-2 {
+    background-color: transparent !important;
+}
+.message.user {
+    background-color: #343541 !important;
     border-radius: 8px;
 }
-.message-row {
-    padding: 20px;
+.message.bot {
+    background-color: #444654 !important;
+    border-radius: 8px;
 }
-.user-message {
-    background-color: #343541;
+button.primary {
+    background-color: #10a37f !important;
+    border: none !important;
 }
-.bot-message {
-    background-color: #444654;
+button.primary:hover {
+    background-color: #0d8c6f !important;
 }
-.dark {
-    background-color: #343541;
-}
-#col-container {
-    background-color: #202123;
-}
-.gradio-container {
-    background-color: #343541 !important;
+.input-text, textarea {
+    background-color: #40414f !important;
+    border: 1px solid #565869 !important;
+    color: #ececf1 !important;
 }
 """
 
 # Create Gradio interface with ChatGPT-style theme
-with gr.Blocks(css=custom_css, theme=gr.themes.Base(
-    primary_hue="blue",
-    secondary_hue="gray",
-    neutral_hue="slate",
-).set(
-    body_background_fill="#343541",
-    body_background_fill_dark="#343541",
-    block_background_fill="#444654",
-    block_background_fill_dark="#444654",
-    input_background_fill="#40414f",
-    input_background_fill_dark="#40414f",
-    button_primary_background_fill="#10a37f",
-    button_primary_background_fill_dark="#10a37f",
-)) as demo:
+with gr.Blocks(css=custom_css, title="TORQ") as demo:
     
     gr.Markdown("""
     # 🤖 TORQ - Mechanical Engineering Assistant
@@ -157,11 +138,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Base(
         
         with gr.Column(scale=2):
             gr.Markdown("### 💬 Chat")
-            chatbot = gr.Chatbot(
-                height=500,
-                type="messages",
-                avatar_images=(None, "🤖")
-            )
+            chatbot = gr.Chatbot(height=500)
             msg = gr.Textbox(
                 label="Your message",
                 placeholder="Ask about mechanical engineering...",
@@ -202,4 +179,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Base(
     clear.click(lambda: [], None, chatbot)
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(
+        share=False,
+        show_error=True
+    )
