@@ -158,7 +158,13 @@ if prompt := st.chat_input("Ask about mechanical engineering..."):
                 response = "Please set GROQ_API_KEY in Streamlit secrets"
             else:
                 if use_rag:
-                    context_docs, sources = st.session_state.vector_store.search(prompt)
+                    search_results = st.session_state.vector_store.search(prompt)
+                    if isinstance(search_results, tuple) and len(search_results) == 2:
+                        context_docs, sources = search_results
+                    else:
+                        context_docs = search_results
+                        sources = []
+                    
                     if context_docs:
                         context = "\n\n".join(context_docs[:3])
                         full_prompt = f"""Based on the following context from uploaded documents, answer the question. If the context doesn't contain enough information, say so and provide general knowledge.
