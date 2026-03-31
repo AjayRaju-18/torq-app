@@ -15,23 +15,15 @@ def extract_text_from_pdf(file_path):
             text += page.extract_text()
     return text
 
-def split_text(text, chunk_size=1000):
+def split_text(text, chunk_size=800, overlap=100):
+    """Split text into overlapping chunks for better context preservation"""
     words = text.split()
     chunks = []
-    current_chunk = []
-    current_size = 0
     
-    for word in words:
-        current_chunk.append(word)
-        current_size += len(word) + 1
-        
-        if current_size >= chunk_size:
-            chunks.append(' '.join(current_chunk))
-            current_chunk = []
-            current_size = 0
-    
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk_words = words[i:i + chunk_size]
+        if len(chunk_words) > 50:  # Only keep substantial chunks
+            chunks.append(' '.join(chunk_words))
     
     return chunks
 
@@ -39,34 +31,54 @@ def split_text(text, chunk_size=1000):
 class SimpleVectorStore:
     def __init__(self):
         self.documents = []
+        self.original_documents = []  # Store original text for better context
         self.metadata = []
-        self.vectorizer = TfidfVectorizer(max_features=500, stop_words='english')
+        self.vectorizer = TfidfVectorizer(
+            max_features=1000, 
+            stop_words='english',
+            ngram_range=(1, 3),  # Include 1-3 word phrases
+            min_df=1,
+            max_df=0.95
+        )
         self.document_vectors = None
     
     def add_documents(self, documents):
         for doc in documents:
-            content = re.sub(r'[^a-zA-Z0-9\s]', ' ', doc['content'].lower())
-            self.documents.append(content)
+            # Store original content for context
+            original_content = doc['content']
+            self.original_documents.append(original_content)
+            
+            # Process for search
+            processed_content = re.sub(r'[^a-zA-Z0-9\s]', ' ', original_content.lower())
+            processed_content = ' '.join(processed_content.split())  # Clean whitespace
+            
+            self.documents.append(processed_content)
             self.metadata.append(doc.get('metadata', {}))
         
         if self.documents:
             self.document_vectors = self.vectorizer.fit_transform(self.documents)
     
-    def search(self, query, top_k=3):
+    def search(self, query, top_k=5):
         if not self.documents or self.document_vectors is None:
             return [], []
         
-        query = re.sub(r'[^a-zA-Z0-9\s]', ' ', query.lower())
-        query_vector = self.vectorizer.transform([query])
+        # Process query similar to documents
+        processed_query = re.sub(r'[^a-zA-Z0-9\s]', ' ', query.lower())
+        processed_query = ' '.join(processed_query.split())
+        
+        query_vector = self.vectorizer.transform([processed_query])
         similarities = cosine_similarity(query_vector, self.document_vectors)[0]
+        
+        # Get top k indices sorted by similarity
         top_indices = np.argsort(similarities)[-top_k:][::-1]
         
-        # Filter results with similarity > 0.01 and return both content and metadata
+        # Filter results with similarity > 0.05 (higher threshold for better relevance)
         results = []
         sources = []
         for i in top_indices:
-            if similarities[i] > 0.01:
-                results.append(self.documents[i])
+            if similarities[i] > 0.05:
+                # Return original content (not processed)
+                results.append(self.original_documents[i])
                 sources.append(self.metadata[i].get('source', 'Unknown'))
         
         return results, sources
@@ -166,27 +178,37 @@ if prompt := st.chat_input("Ask about mechanical engineering..."):
                         sources = []
                     
                     if context_docs:
-                        context = "\n\n".join(context_docs[:3])
-                        full_prompt = f"""Based on the following context from uploaded documents, answer the question. If the context doesn't contain enough information, say so and provide general knowledge.
+                        # Use top 3 most relevant chunks
+                        context = "\n\n---\n\n".join(context_docs[:3])
+                        
+                        full_prompt = f"""You are TORQ, a mechanical engineering assistant. Answer the question STRICTLY based on the provided context from the uploaded PDF document. 
 
-Context from uploaded PDF:
+IMPORTANT INSTRUCTIONS:
+- Use ONLY the information provided in the context below
+- If the context doesn't contain enough information to answer the question, clearly state "The uploaded PDF doesn't contain sufficient information about this topic"
+- Do NOT use general knowledge unless the context is insufficient
+- Quote relevant parts from the context when possible
+- Be specific and detailed in your answer
+
+CONTEXT FROM UPLOADED PDF:
 {context}
 
-Question: {prompt}
+QUESTION: {prompt}
 
-Answer based on the context above:"""
+ANSWER (based strictly on the PDF context):"""
                         
                         # Show which documents are being used
                         if sources:
-                            st.info(f"📚 Using content from: {', '.join(set(sources))}")
+                            unique_sources = list(set(sources))
+                            st.info(f"📚 Searching in: {', '.join(unique_sources)} | Found {len(context_docs)} relevant sections")
                     else:
-                        full_prompt = f"No relevant content found in uploaded PDFs. Please answer based on general mechanical engineering knowledge: {prompt}"
-                        st.warning("⚠️ No relevant content found in uploaded PDFs. Answering from general knowledge.")
+                        full_prompt = f"The uploaded PDF doesn't contain any relevant information about: '{prompt}'. Please upload a PDF that covers this topic, or disable RAG mode for general mechanical engineering knowledge."
+                        st.warning("⚠️ No relevant content found in uploaded PDFs for this question.")
                 else:
-                    full_prompt = prompt
+                    full_prompt = f"Answer this mechanical engineering question using your general knowledge: {prompt}"
                 
                 messages = [
-                    {"role": "system", "content": "You are TORQ, a mechanical engineering assistant. When provided with context from documents, prioritize that information in your response. Always be clear about whether you're using uploaded document content or general knowledge."},
+                    {"role": "system", "content": "You are TORQ, a mechanical engineering assistant. When RAG mode is enabled, you MUST prioritize and use ONLY the provided PDF context. Be precise and cite the source material."},
                     {"role": "user", "content": full_prompt}
                 ]
                 
