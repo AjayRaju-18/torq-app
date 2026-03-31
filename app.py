@@ -1,130 +1,164 @@
 import streamlit as st
 import os
-from pdf_processor import PDFProcessor
-from vector_store import VectorStore
-from torq_model import TORQModel
-from datetime import datetime
+import re
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import PyPDF2
 
-# Page config
-st.set_page_config(
-    page_title="TORQ - Mechanical Engineering Assistant",
-    page_icon="🤖",
-    layout="wide"
-)
+# Simple PDF processor
+def extract_text_from_pdf(file_path):
+    text = ""
+    with open(file_path, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+    return text
 
-# Initialize TORQ
-@st.cache_resource
-def init_torq():
-    return TORQModel(), PDFProcessor(), VectorStore()
+def split_text(text, chunk_size=1000):
+    words = text.split()
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    
+    for word in words:
+        current_chunk.append(word)
+        current_size += len(word) + 1
+        
+        if current_size >= chunk_size:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = []
+            current_size = 0
+    
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+    
+    return chunks
 
-torq_model, pdf_processor, vector_store = init_torq()
+# Simple vector store
+class SimpleVectorStore:
+    def __init__(self):
+        self.documents = []
+        self.metadata = []
+        self.vectorizer = TfidfVectorizer(max_features=500, stop_words='english')
+        self.document_vectors = None
+    
+    def add_documents(self, documents):
+        for doc in documents:
+            content = re.sub(r'[^a-zA-Z0-9\s]', ' ', doc['content'].lower())
+            self.documents.append(content)
+            self.metadata.append(doc.get('metadata', {}))
+        
+        if self.documents:
+            self.document_vectors = self.vectorizer.fit_transform(self.documents)
+    
+    def search(self, query, top_k=3):
+        if not self.documents or self.document_vectors is None:
+            return []
+        
+        query = re.sub(r'[^a-zA-Z0-9\s]', ' ', query.lower())
+        query_vector = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vector, self.document_vectors)[0]
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
+        
+        return [self.documents[i] for i in top_indices if similarities[i] > 0.01]
 
-# Initialize session state
+# Simple GROQ client
+def call_groq(messages, api_key):
+    import requests
+    
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        'model': 'llama-3.1-8b-instant',
+        'messages': messages,
+        'temperature': 0.7,
+        'max_tokens': 1024
+    }
+    
+    try:
+        response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
+                               headers=headers, json=data)
+        return response.json()['choices'][0]['message']['content']
+    except:
+        return "Error: Could not connect to GROQ API"
+
+# Streamlit app
+st.set_page_config(page_title="TORQ", page_icon="🤖")
+st.title("🤖 TORQ - Mechanical Engineering Assistant")
+
+# Initialize
+if 'vector_store' not in st.session_state:
+    st.session_state.vector_store = SimpleVectorStore()
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-
-# Custom CSS for ChatGPT-like dark theme
-st.markdown("""
-<style>
-    .stApp {
-        background: linear-gradient(to bottom, #202123, #343541);
-    }
-    .stChatMessage {
-        background-color: #444654;
-        border-radius: 8px;
-    }
-    .stButton>button {
-        background-color: #10a37f;
-        color: white;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #0d8c6f;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Title
-st.title("🤖 TORQ - Mechanical Engineering Assistant")
-st.caption("Powered by GROQ LLM with RAG")
 
 # Sidebar
 with st.sidebar:
     st.header("📄 Upload PDFs")
     uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
     
-    if uploaded_file and st.button("Process PDF", type="primary"):
-        with st.spinner("Processing PDF..."):
-            try:
-                # Save uploaded file temporarily
-                temp_path = f"temp_{uploaded_file.name}"
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                # Process PDF
-                text = pdf_processor.extract_text_from_pdf(temp_path)
-                chunks = pdf_processor.split_text(text)
-                
-                documents = []
-                for i, chunk in enumerate(chunks):
-                    documents.append({
-                        'content': chunk,
-                        'metadata': {
-                            'source': uploaded_file.name,
-                            'chunk_id': i,
-                            'upload_date': datetime.now().isoformat()
-                        }
-                    })
-                
-                vector_store.add_documents(documents)
-                os.remove(temp_path)
-                
-                st.success(f"✅ Successfully processed {uploaded_file.name} - Added {len(chunks)} chunks")
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+    if uploaded_file and st.button("Process PDF"):
+        with st.spinner("Processing..."):
+            temp_path = f"temp_{uploaded_file.name}"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            text = extract_text_from_pdf(temp_path)
+            chunks = split_text(text)
+            
+            documents = []
+            for i, chunk in enumerate(chunks):
+                documents.append({
+                    'content': chunk,
+                    'metadata': {'source': uploaded_file.name, 'chunk_id': i}
+                })
+            
+            st.session_state.vector_store.add_documents(documents)
+            os.remove(temp_path)
+            st.success(f"Processed {len(chunks)} chunks")
     
-    st.divider()
-    st.header("⚙️ Settings")
-    use_rag = st.checkbox("Enable RAG Mode", value=True, help="Use uploaded PDFs for context")
+    use_rag = st.checkbox("Enable RAG Mode", value=True)
     
     if st.button("Clear Chat"):
         st.session_state.messages = []
         st.rerun()
 
-# Chat interface
+# Chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Chat input
 if prompt := st.chat_input("Ask about mechanical engineering..."):
-    # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Generate response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            try:
-                # Convert history
-                conv_history = []
-                for msg in st.session_state.messages[:-1]:  # Exclude current message
-                    conv_history.append({'role': msg['role'], 'content': msg['content']})
-                
-                # Generate response
+            api_key = os.getenv('GROQ_API_KEY')
+            if not api_key:
+                response = "Please set GROQ_API_KEY in Streamlit secrets"
+            else:
                 if use_rag:
-                    result = torq_model.generate_response(prompt, conv_history)
-                    response = result['answer']
-                    if result.get('sources'):
-                        response += f"\n\n📚 Sources: {', '.join(result['sources'])}"
+                    context_docs = st.session_state.vector_store.search(prompt)
+                    if context_docs:
+                        context = "\n\n".join(context_docs[:3])
+                        full_prompt = f"Context: {context}\n\nQuestion: {prompt}"
+                    else:
+                        full_prompt = prompt
                 else:
-                    response = torq_model.generate_chat_response(prompt, conv_history)
+                    full_prompt = prompt
                 
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                messages = [
+                    {"role": "system", "content": "You are TORQ, a mechanical engineering assistant."},
+                    {"role": "user", "content": full_prompt}
+                ]
+                
+                response = call_groq(messages, api_key)
             
-            except Exception as e:
-                error_msg = f"Error: {str(e)}"
-                st.error(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})

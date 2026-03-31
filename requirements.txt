@@ -1,9 +1,6 @@
-# Core dependencies
-python-dotenv
-groq
-pypdf2
-numpy==1.21.6
-scikit-learn
-requests
-# Web framework
+# Minimal dependencies
 streamlit
+pypdf2
+scikit-learn
+numpy==1.21.6
+requests
