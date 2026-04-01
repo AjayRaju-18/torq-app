@@ -150,16 +150,17 @@ def call_groq(messages, api_key):
         'model': 'llama-3.1-8b-instant',
         'messages': messages,
         'temperature': 0.7,
-        'max_tokens': 800
+        'max_tokens': 2048  # Increased from 800 to allow longer responses
     }
     
     try:
         total_text = " ".join([msg['content'] for msg in messages])
         estimated_tokens = estimate_tokens(total_text)
         
-        if estimated_tokens > 5000:
-            if len(messages) > 1 and len(messages[-1]['content']) > 2000:
-                messages[-1]['content'] = messages[-1]['content'][:2000] + "...[truncated]"
+        # Be more conservative with token limits to allow longer responses
+        if estimated_tokens > 4000:  # Reduced from 5000 to leave more room for response
+            if len(messages) > 1 and len(messages[-1]['content']) > 1500:  # Reduced from 2000
+                messages[-1]['content'] = messages[-1]['content'][:1500] + "...[truncated]"
         
         response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
                                headers=headers, json=data, timeout=30)
@@ -167,7 +168,14 @@ def call_groq(messages, api_key):
         if response.status_code == 200:
             result = response.json()
             if 'choices' in result and len(result['choices']) > 0:
-                return result['choices'][0]['message']['content']
+                content = result['choices'][0]['message']['content']
+                
+                # Check if response was truncated due to token limit
+                finish_reason = result['choices'][0].get('finish_reason', '')
+                if finish_reason == 'length':
+                    content += "\n\n⚠️ *Response truncated due to length. Ask me to continue for more details.*"
+                
+                return content
             else:
                 return f"Error: Unexpected API response"
         
@@ -394,17 +402,17 @@ if prompt := st.chat_input("Ask me anything..."):
                         
                         if context_docs:
                             context = "\n\n".join(context_docs[:2])
-                            if len(context) > 3000:
-                                context = context[:3000] + "..."
+                            if len(context) > 2500:  # Reduced from 3000 to leave more room for response
+                                context = context[:2500] + "..."
                             
-                            full_prompt = f"""Based on the PDF content, answer concisely.
+                            full_prompt = f"""Based on PDF content, answer the question.
 
 PDF CONTENT:
 {context}
 
 QUESTION: {prompt}
 
-ANSWER:"""
+DETAILED ANSWER:"""
                             st.info(f"📖 Found {len(context_docs)} relevant sections")
                         else:
                             full_prompt = f"The PDF doesn't contain relevant information for: '{prompt}'"
@@ -418,11 +426,11 @@ ANSWER:"""
                     st.error("PDF required for Educational Mode")
                 
                 else:
-                    full_prompt = f"""You are TORQ, an AI assistant. Provide helpful responses.
+                    full_prompt = f"""You are TORQ, an AI assistant. Provide detailed, helpful responses.
 
 QUESTION: {prompt}
 
-RESPONSE:"""
+DETAILED RESPONSE:"""
                     st.info("🤖 Personal Assistant Mode")
                 
                 messages = [
