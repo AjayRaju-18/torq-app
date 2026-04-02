@@ -10,6 +10,7 @@ from datetime import datetime
 import uuid
 import pickle
 import shutil
+import base64
 
 # Simple PDF processor
 def extract_text_from_pdf(file_path):
@@ -220,12 +221,47 @@ def get_conversation_context(messages, max_context=3):
     
     return "\n".join(context_parts)
 
+# Persistent storage functions using session state
+def save_pdf_data(vector_store, pdf_name):
+    """Save PDF data to session state for persistence"""
+    if len(vector_store.documents) > 0:
+        pdf_data = {
+            'documents': vector_store.documents,
+            'original_documents': vector_store.original_documents,
+            'metadata': vector_store.metadata,
+            'pdf_name': pdf_name,
+            'timestamp': datetime.now().isoformat()
+        }
+        # Store in session state
+        st.session_state['saved_pdf_data'] = pdf_data
+        return True
+    return False
+
+def load_pdf_data(vector_store):
+    """Load PDF data from session state"""
+    if 'saved_pdf_data' in st.session_state:
+        try:
+            pdf_data = st.session_state['saved_pdf_data']
+            vector_store.documents = pdf_data['documents']
+            vector_store.original_documents = pdf_data['original_documents']
+            vector_store.metadata = pdf_data['metadata']
+            
+            # Rebuild vectorizer and document vectors
+            if vector_store.documents:
+                vector_store.document_vectors = vector_store.vectorizer.fit_transform(vector_store.documents)
+            
+            return pdf_data.get('pdf_name', 'Unknown PDF')
+        except Exception as e:
+            print(f"Error loading PDF data: {e}")
+            return None
+    return None
+
 # Streamlit app
 st.set_page_config(
     page_title="TORQ", 
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"  # Changed from "expanded" to "auto" for mobile
 )
 
 # ChatGPT-like CSS
@@ -256,12 +292,50 @@ st.markdown("""
         color: #374151;
         margin: 0;
     }
+    
+    /* Mobile-friendly sidebar */
+    @media (max-width: 768px) {
+        section[data-testid="stSidebar"] {
+            width: 80% !important;
+            max-width: 300px !important;
+        }
+        
+        section[data-testid="stSidebar"] > div {
+            width: 100% !important;
+        }
+        
+        /* Make sidebar toggle button more visible on mobile */
+        button[kind="header"] {
+            background-color: #667eea !important;
+            color: white !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 1rem !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Ensure sidebar content is scrollable on mobile */
+        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+            overflow-y: auto !important;
+            max-height: 90vh !important;
+        }
+    }
+    
+    /* Desktop sidebar */
+    @media (min-width: 769px) {
+        section[data-testid="stSidebar"] {
+            width: 300px !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'vector_store' not in st.session_state:
     st.session_state.vector_store = SimpleVectorStore()
+    # Try to load saved PDF data
+    loaded_pdf = load_pdf_data(st.session_state.vector_store)
+    if loaded_pdf:
+        st.session_state['pdf_loaded_name'] = loaded_pdf
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -279,6 +353,9 @@ if 'chat_histories' not in st.session_state:
 st.markdown("""
 <div class="chat-header">
     <h1 class="chat-title">TORQ</h1>
+    <p style="color: #6b7280; font-size: 0.9rem; margin-top: 0.5rem;">
+        📱 Tap the arrow (→) in the top-left to access chat history
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -327,6 +404,11 @@ if mode_options[selected_mode] != st.session_state.current_mode:
 
 # PDF Upload for Educational Mode
 if st.session_state.current_mode == "educational":
+    # Show loaded PDF status if exists
+    if 'pdf_loaded_name' in st.session_state and len(st.session_state.vector_store.documents) > 0:
+        st.success(f"📚 PDF Loaded: **{st.session_state['pdf_loaded_name']}** ({len(st.session_state.vector_store.documents)} chunks)")
+        st.info("✅ PDF will remain loaded even after closing the browser")
+    
     with st.expander("📄 Upload PDF", expanded=len(st.session_state.vector_store.documents) == 0):
         uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
         
@@ -349,13 +431,23 @@ if st.session_state.current_mode == "educational":
                         })
                     
                     st.session_state.vector_store.add_documents(documents)
+                    
+                    # Save PDF data for persistence
+                    save_pdf_data(st.session_state.vector_store, uploaded_file.name)
+                    st.session_state['pdf_loaded_name'] = uploaded_file.name
+                    
                     os.remove(temp_path)
-                    st.success(f"✅ Processed {len(chunks)} chunks")
+                    st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
+                    st.info("📱 PDF will stay loaded even after closing the app!")
                     st.rerun()
         
         with col2:
             if len(st.session_state.vector_store.documents) > 0 and st.button("Clear PDF"):
                 st.session_state.vector_store.clear_all()
+                if 'saved_pdf_data' in st.session_state:
+                    del st.session_state['saved_pdf_data']
+                if 'pdf_loaded_name' in st.session_state:
+                    del st.session_state['pdf_loaded_name']
                 st.success("PDF cleared")
                 st.rerun()
         
