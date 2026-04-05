@@ -30,3 +30,4 @@ uploads/
 *.sqlite
 .DS_Store
 .streamlit/secrets.toml
+.vercel

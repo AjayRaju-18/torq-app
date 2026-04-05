@@ -153,40 +153,71 @@ def split_text(text, chunk_size=500, overlap=50):
     
     return chunks
 
-def call_groq(messages, api_key):
-    """Call GROQ API"""
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
+def call_gemini(messages, api_key):
+    """Call Gemini API"""
+    if not api_key:
+        return "Error: Gemini API key not found."
+    
+    # Convert OpenAI-style messages to Gemini format
+    gemini_contents = []
+    system_instruction = ""
+    
+    for msg in messages:
+        if msg['role'] == 'system':
+            system_instruction = msg['content']
+        elif msg['role'] == 'user':
+            gemini_contents.append({
+                "role": "user",
+                "parts": [{"text": msg['content']}]
+            })
+        elif msg['role'] == 'assistant':
+            gemini_contents.append({
+                "role": "model",
+                "parts": [{"text": msg['content']}]
+            })
+    
+    # Gemini API endpoint
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     data = {
-        'model': 'llama-3.1-8b-instant',
-        'messages': messages,
-        'temperature': 0.7,
-        'max_tokens': 2048
+        "contents": gemini_contents,
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 2048,
+            "topP": 0.95,
+            "topK": 40
+        }
     }
     
+    # Add system instruction if present
+    if system_instruction:
+        data["systemInstruction"] = {
+            "parts": [{"text": system_instruction}]
+        }
+    
     try:
-        response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
-                               headers=headers, json=data, timeout=30)
+        response = requests.post(url, json=data, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
-            if 'choices' in result and len(result['choices']) > 0:
-                content = result['choices'][0]['message']['content']
-                finish_reason = result['choices'][0].get('finish_reason', '')
-                if finish_reason == 'length':
+            if 'candidates' in result and len(result['candidates']) > 0:
+                content = result['candidates'][0]['content']['parts'][0]['text']
+                finish_reason = result['candidates'][0].get('finishReason', '')
+                if finish_reason == 'MAX_TOKENS':
                     content += "\n\n⚠️ *Response truncated. Ask me to continue.*"
                 return content
             else:
                 return "Error: Unexpected API response"
         
-        elif response.status_code == 401:
-            return "Error: Invalid GROQ API key."
+        elif response.status_code == 400:
+            error_msg = response.json().get('error', {}).get('message', 'Bad request')
+            return f"Error: {error_msg}"
+        
+        elif response.status_code == 403:
+            return "Error: Invalid Gemini API key or API not enabled."
         
         elif response.status_code == 429:
-            return "Error: Rate limit exceeded."
+            return "Error: Rate limit exceeded. Please try again in a minute."
         
         else:
             return f"Error: API returned status {response.status_code}"
@@ -231,7 +262,7 @@ def chat():
         return jsonify({'error': 'No prompt provided'}), 400
     
     # Get API key
-    api_key = os.environ.get('GROQ_API_KEY', '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')
+    api_key = os.environ.get('GEMINI_API_KEY', '')
     
     # Get vector store
     vector_store = get_vector_store()
@@ -284,7 +315,7 @@ DETAILED RESPONSE:"""
         {"role": "user", "content": full_prompt}
     ]
     
-    response_text = call_groq(messages, api_key)
+    response_text = call_gemini(messages, api_key)
     
     # Add assistant response to session
     session['messages'].append({'role': 'assistant', 'content': response_text})

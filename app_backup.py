@@ -10,7 +10,6 @@ from datetime import datetime
 import uuid
 import pickle
 import shutil
-import base64
 
 # Simple PDF processor
 def extract_text_from_pdf(file_path):
@@ -136,75 +135,47 @@ def estimate_tokens(text):
     """Rough estimation of tokens"""
     return len(text) // 4
 
-def call_gemini(messages, api_key):
+def call_groq(messages, api_key):
     import requests
     
     if not api_key:
-        return "Error: Gemini API key not found."
+        return "Error: GROQ API key not found."
     
-    # Convert OpenAI-style messages to Gemini format
-    gemini_contents = []
-    system_instruction = ""
-    
-    for msg in messages:
-        if msg['role'] == 'system':
-            system_instruction = msg['content']
-        elif msg['role'] == 'user':
-            gemini_contents.append({
-                "role": "user",
-                "parts": [{"text": msg['content']}]
-            })
-        elif msg['role'] == 'assistant':
-            gemini_contents.append({
-                "role": "model",
-                "parts": [{"text": msg['content']}]
-            })
-    
-    # Gemini API endpoint
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    
-    data = {
-        "contents": gemini_contents,
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 2048,
-            "topP": 0.95,
-            "topK": 40
-        }
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
     }
     
-    # Add system instruction if present
-    if system_instruction:
-        data["systemInstruction"] = {
-            "parts": [{"text": system_instruction}]
-        }
+    data = {
+        'model': 'llama-3.1-8b-instant',
+        'messages': messages,
+        'temperature': 0.7,
+        'max_tokens': 800
+    }
     
     try:
-        response = requests.post(url, json=data, timeout=30)
+        total_text = " ".join([msg['content'] for msg in messages])
+        estimated_tokens = estimate_tokens(total_text)
+        
+        if estimated_tokens > 5000:
+            if len(messages) > 1 and len(messages[-1]['content']) > 2000:
+                messages[-1]['content'] = messages[-1]['content'][:2000] + "...[truncated]"
+        
+        response = requests.post('https://api.groq.com/openai/v1/chat/completions', 
+                               headers=headers, json=data, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
-            if 'candidates' in result and len(result['candidates']) > 0:
-                content = result['candidates'][0]['content']['parts'][0]['text']
-                
-                # Check if response was truncated
-                finish_reason = result['candidates'][0].get('finishReason', '')
-                if finish_reason == 'MAX_TOKENS':
-                    content += "\n\n⚠️ *Response truncated due to length. Ask me to continue for more details.*"
-                
-                return content
+            if 'choices' in result and len(result['choices']) > 0:
+                return result['choices'][0]['message']['content']
             else:
                 return f"Error: Unexpected API response"
         
-        elif response.status_code == 400:
-            error_msg = response.json().get('error', {}).get('message', 'Bad request')
-            return f"Error: {error_msg}"
-        
-        elif response.status_code == 403:
-            return "Error: Invalid Gemini API key or API not enabled."
+        elif response.status_code == 401:
+            return "Error: Invalid GROQ API key."
         
         elif response.status_code == 429:
-            return "Error: Rate limit exceeded. Please try again in a minute."
+            return "Error: Rate limit exceeded. Please try again."
         
         else:
             return f"Error: API returned status {response.status_code}"
@@ -213,7 +184,7 @@ def call_gemini(messages, api_key):
         return "Error: Request timed out."
     
     except requests.exceptions.ConnectionError:
-        return "Error: Could not connect to Gemini API."
+        return "Error: Could not connect to API."
     
     except Exception as e:
         return f"Error: {str(e)}"
@@ -241,47 +212,12 @@ def get_conversation_context(messages, max_context=3):
     
     return "\n".join(context_parts)
 
-# Persistent storage functions using session state
-def save_pdf_data(vector_store, pdf_name):
-    """Save PDF data to session state for persistence"""
-    if len(vector_store.documents) > 0:
-        pdf_data = {
-            'documents': vector_store.documents,
-            'original_documents': vector_store.original_documents,
-            'metadata': vector_store.metadata,
-            'pdf_name': pdf_name,
-            'timestamp': datetime.now().isoformat()
-        }
-        # Store in session state
-        st.session_state['saved_pdf_data'] = pdf_data
-        return True
-    return False
-
-def load_pdf_data(vector_store):
-    """Load PDF data from session state"""
-    if 'saved_pdf_data' in st.session_state:
-        try:
-            pdf_data = st.session_state['saved_pdf_data']
-            vector_store.documents = pdf_data['documents']
-            vector_store.original_documents = pdf_data['original_documents']
-            vector_store.metadata = pdf_data['metadata']
-            
-            # Rebuild vectorizer and document vectors
-            if vector_store.documents:
-                vector_store.document_vectors = vector_store.vectorizer.fit_transform(vector_store.documents)
-            
-            return pdf_data.get('pdf_name', 'Unknown PDF')
-        except Exception as e:
-            print(f"Error loading PDF data: {e}")
-            return None
-    return None
-
 # Streamlit app
 st.set_page_config(
     page_title="TORQ", 
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="auto"  # Changed from "expanded" to "auto" for mobile
+    initial_sidebar_state="expanded"
 )
 
 # ChatGPT-like CSS
@@ -312,50 +248,12 @@ st.markdown("""
         color: #374151;
         margin: 0;
     }
-    
-    /* Mobile-friendly sidebar */
-    @media (max-width: 768px) {
-        section[data-testid="stSidebar"] {
-            width: 80% !important;
-            max-width: 300px !important;
-        }
-        
-        section[data-testid="stSidebar"] > div {
-            width: 100% !important;
-        }
-        
-        /* Make sidebar toggle button more visible on mobile */
-        button[kind="header"] {
-            background-color: #667eea !important;
-            color: white !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1rem !important;
-            font-weight: 600 !important;
-        }
-        
-        /* Ensure sidebar content is scrollable on mobile */
-        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-            overflow-y: auto !important;
-            max-height: 90vh !important;
-        }
-    }
-    
-    /* Desktop sidebar */
-    @media (min-width: 769px) {
-        section[data-testid="stSidebar"] {
-            width: 300px !important;
-        }
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'vector_store' not in st.session_state:
     st.session_state.vector_store = SimpleVectorStore()
-    # Try to load saved PDF data
-    loaded_pdf = load_pdf_data(st.session_state.vector_store)
-    if loaded_pdf:
-        st.session_state['pdf_loaded_name'] = loaded_pdf
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -373,9 +271,6 @@ if 'chat_histories' not in st.session_state:
 st.markdown("""
 <div class="chat-header">
     <h1 class="chat-title">TORQ</h1>
-    <p style="color: #6b7280; font-size: 0.9rem; margin-top: 0.5rem;">
-        📱 Tap the arrow (→) in the top-left to access chat history
-    </p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -424,11 +319,6 @@ if mode_options[selected_mode] != st.session_state.current_mode:
 
 # PDF Upload for Educational Mode
 if st.session_state.current_mode == "educational":
-    # Show loaded PDF status if exists
-    if 'pdf_loaded_name' in st.session_state and len(st.session_state.vector_store.documents) > 0:
-        st.success(f"📚 PDF Loaded: **{st.session_state['pdf_loaded_name']}** ({len(st.session_state.vector_store.documents)} chunks)")
-        st.info("✅ PDF will remain loaded even after closing the browser")
-    
     with st.expander("📄 Upload PDF", expanded=len(st.session_state.vector_store.documents) == 0):
         uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
         
@@ -451,23 +341,13 @@ if st.session_state.current_mode == "educational":
                         })
                     
                     st.session_state.vector_store.add_documents(documents)
-                    
-                    # Save PDF data for persistence
-                    save_pdf_data(st.session_state.vector_store, uploaded_file.name)
-                    st.session_state['pdf_loaded_name'] = uploaded_file.name
-                    
                     os.remove(temp_path)
-                    st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
-                    st.info("📱 PDF will stay loaded even after closing the app!")
+                    st.success(f"✅ Processed {len(chunks)} chunks")
                     st.rerun()
         
         with col2:
             if len(st.session_state.vector_store.documents) > 0 and st.button("Clear PDF"):
                 st.session_state.vector_store.clear_all()
-                if 'saved_pdf_data' in st.session_state:
-                    del st.session_state['saved_pdf_data']
-                if 'pdf_loaded_name' in st.session_state:
-                    del st.session_state['pdf_loaded_name']
                 st.success("PDF cleared")
                 st.rerun()
         
@@ -489,15 +369,15 @@ if prompt := st.chat_input("Ask me anything..."):
             # Get API key
             api_key = None
             try:
-                api_key = st.secrets.get("GEMINI_API_KEY")
+                api_key = st.secrets.get("GROQ_API_KEY")
             except:
                 pass
             
             if not api_key:
-                api_key = os.getenv('GEMINI_API_KEY')
+                api_key = os.getenv('GROQ_API_KEY')
             
             if not api_key:
-                response = "⚠️ API key not configured. Please add GEMINI_API_KEY to Streamlit secrets."
+                response = "⚠️ API key not configured. Please add GROQ_API_KEY to Streamlit secrets."
             else:
                 conversation_context = get_conversation_context(st.session_state.messages[:-1])
                 
@@ -514,17 +394,17 @@ if prompt := st.chat_input("Ask me anything..."):
                         
                         if context_docs:
                             context = "\n\n".join(context_docs[:2])
-                            if len(context) > 2500:  # Reduced from 3000 to leave more room for response
-                                context = context[:2500] + "..."
+                            if len(context) > 3000:
+                                context = context[:3000] + "..."
                             
-                            full_prompt = f"""Based on PDF content, answer the question.
+                            full_prompt = f"""Based on the PDF content, answer concisely.
 
 PDF CONTENT:
 {context}
 
 QUESTION: {prompt}
 
-DETAILED ANSWER:"""
+ANSWER:"""
                             st.info(f"📖 Found {len(context_docs)} relevant sections")
                         else:
                             full_prompt = f"The PDF doesn't contain relevant information for: '{prompt}'"
@@ -538,11 +418,11 @@ DETAILED ANSWER:"""
                     st.error("PDF required for Educational Mode")
                 
                 else:
-                    full_prompt = f"""You are TORQ, an AI assistant. Provide detailed, helpful responses.
+                    full_prompt = f"""You are TORQ, an AI assistant. Provide helpful responses.
 
 QUESTION: {prompt}
 
-DETAILED RESPONSE:"""
+RESPONSE:"""
                     st.info("🤖 Personal Assistant Mode")
                 
                 messages = [
@@ -550,7 +430,7 @@ DETAILED RESPONSE:"""
                     {"role": "user", "content": full_prompt}
                 ]
                 
-                response = call_gemini(messages, api_key)
+                response = call_groq(messages, api_key)
             
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
