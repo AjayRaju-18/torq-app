@@ -340,67 +340,207 @@ st.set_page_config(
     initial_sidebar_state="auto"  # Changed from "expanded" to "auto" for mobile
 )
 
-# ChatGPT-like CSS
+# ChatGPT-like CSS with responsive design
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    .main {
+    * {
         font-family: 'Inter', sans-serif;
-        background-color: #ffffff;
     }
     
+    .main {
+        background-color: #ffffff;
+        padding: 0;
+    }
+    
+    /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {visibility: hidden;}
     
+    /* Header */
     .chat-header {
         text-align: center;
-        padding: 1rem 0;
+        padding: 1.5rem 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .chat-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .chat-subtitle {
+        color: rgba(255,255,255,0.9);
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background-color: #f9fafb;
+        border-right: 1px solid #e5e7eb;
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        padding-top: 2rem;
+    }
+    
+    .sidebar-header {
+        padding: 0 1rem 1rem 1rem;
         border-bottom: 1px solid #e5e7eb;
         margin-bottom: 1rem;
     }
     
-    .chat-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: #374151;
-        margin: 0;
+    /* Chat messages */
+    .stChatMessage {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
     }
     
-    /* Mobile-friendly sidebar */
+    /* Buttons */
+    .stButton > button {
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    /* File uploader */
+    .stFileUploader {
+        border: 2px dashed #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+        color: #374151;
+    }
+    
+    /* MOBILE RESPONSIVE */
     @media (max-width: 768px) {
+        /* Header adjustments */
+        .chat-header {
+            padding: 1rem 0.5rem;
+        }
+        
+        .chat-title {
+            font-size: 1.5rem;
+        }
+        
+        .chat-subtitle {
+            font-size: 0.8rem;
+        }
+        
+        /* Sidebar for mobile */
         section[data-testid="stSidebar"] {
-            width: 80% !important;
-            max-width: 300px !important;
+            width: 85% !important;
+            max-width: 320px !important;
         }
         
         section[data-testid="stSidebar"] > div {
             width: 100% !important;
+            padding-top: 1rem;
         }
         
-        /* Make sidebar toggle button more visible on mobile */
+        /* Sidebar toggle button */
         button[kind="header"] {
             background-color: #667eea !important;
             color: white !important;
             border-radius: 8px !important;
             padding: 0.5rem 1rem !important;
             font-weight: 600 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
         
-        /* Ensure sidebar content is scrollable on mobile */
+        /* Scrollable sidebar */
         section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
             overflow-y: auto !important;
             max-height: 90vh !important;
         }
+        
+        /* Chat input */
+        .stChatInput {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 0.5rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        /* Reduce padding on mobile */
+        .main .block-container {
+            padding: 1rem 0.5rem;
+        }
+        
+        /* Smaller buttons on mobile */
+        .stButton > button {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+        
+        /* Stack columns on mobile */
+        .row-widget.stHorizontal {
+            flex-direction: column;
+        }
     }
     
-    /* Desktop sidebar */
-    @media (min-width: 769px) {
+    /* TABLET */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        section[data-testid="stSidebar"] {
+            width: 280px !important;
+        }
+        
+        .chat-title {
+            font-size: 1.75rem;
+        }
+    }
+    
+    /* DESKTOP */
+    @media (min-width: 1025px) {
         section[data-testid="stSidebar"] {
             width: 300px !important;
         }
+        
+        .main .block-container {
+            max-width: 1200px;
+            padding: 2rem 3rem;
+        }
+        
+        .chat-header {
+            padding: 2rem 1rem;
+        }
+    }
+    
+    /* Success/Info/Warning boxes */
+    /* Success/Info/Warning boxes */
+    .stSuccess, .stInfo, .stWarning {
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    /* Mode selector */
+    .stSelectbox {
+        margin-bottom: 1rem;
+    }
+    
+    /* Smooth animations */
+    * {
+        transition: background-color 0.2s ease, color 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -429,10 +569,8 @@ if 'chat_histories' not in st.session_state:
 # Header
 st.markdown("""
 <div class="chat-header">
-    <h1 class="chat-title">TORQ</h1>
-    <p style="color: #6b7280; font-size: 0.9rem; margin-top: 0.5rem;">
-        📱 Tap the arrow (→) in the top-left to access chat history
-    </p>
+    <h1 class="chat-title">🤖 TORQ</h1>
+    <p class="chat-subtitle">Your AI-Powered Assistant</p>
 </div>
 """, unsafe_allow_html=True)
 
