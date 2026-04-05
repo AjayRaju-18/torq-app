@@ -241,27 +241,51 @@ def get_conversation_context(messages, max_context=3):
     
     return "\n".join(context_parts)
 
-# Persistent storage functions using session state
-def save_pdf_data(vector_store, pdf_name):
-    """Save PDF data to session state for persistence"""
+# Persistent storage functions using pickle files
+def save_pdf_data(vector_store, pdf_name, pdf_content):
+    """Save PDF data to persistent storage"""
+    import pickle
+    import os
+    
+    # Create storage directory if it doesn't exist
+    storage_dir = "torq_storage"
+    if not os.path.exists(storage_dir):
+        os.makedirs(storage_dir)
+    
     if len(vector_store.documents) > 0:
         pdf_data = {
             'documents': vector_store.documents,
             'original_documents': vector_store.original_documents,
             'metadata': vector_store.metadata,
             'pdf_name': pdf_name,
-            'timestamp': datetime.now().isoformat()
+            'pdf_content': pdf_content,  # Store actual PDF bytes
+            'timestamp': datetime.now().isoformat(),
+            'chunk_count': len(vector_store.documents)
         }
-        # Store in session state
+        
+        # Save to file
+        storage_path = os.path.join(storage_dir, "pdf_data.pkl")
+        with open(storage_path, 'wb') as f:
+            pickle.dump(pdf_data, f)
+        
+        # Also store in session state
         st.session_state['saved_pdf_data'] = pdf_data
         return True
     return False
 
 def load_pdf_data(vector_store):
-    """Load PDF data from session state"""
-    if 'saved_pdf_data' in st.session_state:
+    """Load PDF data from persistent storage"""
+    import pickle
+    import os
+    
+    storage_path = os.path.join("torq_storage", "pdf_data.pkl")
+    
+    # Try loading from file first
+    if os.path.exists(storage_path):
         try:
-            pdf_data = st.session_state['saved_pdf_data']
+            with open(storage_path, 'rb') as f:
+                pdf_data = pickle.load(f)
+            
             vector_store.documents = pdf_data['documents']
             vector_store.original_documents = pdf_data['original_documents']
             vector_store.metadata = pdf_data['metadata']
@@ -270,11 +294,43 @@ def load_pdf_data(vector_store):
             if vector_store.documents:
                 vector_store.document_vectors = vector_store.vectorizer.fit_transform(vector_store.documents)
             
-            return pdf_data.get('pdf_name', 'Unknown PDF')
+            # Store in session state
+            st.session_state['saved_pdf_data'] = pdf_data
+            
+            return pdf_data
         except Exception as e:
-            print(f"Error loading PDF data: {e}")
-            return None
+            print(f"Error loading PDF data from file: {e}")
+    
+    # Fallback to session state
+    if 'saved_pdf_data' in st.session_state:
+        try:
+            pdf_data = st.session_state['saved_pdf_data']
+            vector_store.documents = pdf_data['documents']
+            vector_store.original_documents = pdf_data['original_documents']
+            vector_store.metadata = pdf_data['metadata']
+            
+            if vector_store.documents:
+                vector_store.document_vectors = vector_store.vectorizer.fit_transform(vector_store.documents)
+            
+            return pdf_data
+        except Exception as e:
+            print(f"Error loading PDF data from session: {e}")
+    
     return None
+
+def clear_pdf_data():
+    """Clear all PDF data"""
+    import os
+    
+    storage_path = os.path.join("torq_storage", "pdf_data.pkl")
+    if os.path.exists(storage_path):
+        os.remove(storage_path)
+    
+    if 'saved_pdf_data' in st.session_state:
+        del st.session_state['saved_pdf_data']
+    
+    if 'pdf_loaded_name' in st.session_state:
+        del st.session_state['pdf_loaded_name']
 
 # Streamlit app
 st.set_page_config(
@@ -353,9 +409,10 @@ st.markdown("""
 if 'vector_store' not in st.session_state:
     st.session_state.vector_store = SimpleVectorStore()
     # Try to load saved PDF data
-    loaded_pdf = load_pdf_data(st.session_state.vector_store)
-    if loaded_pdf:
-        st.session_state['pdf_loaded_name'] = loaded_pdf
+    loaded_pdf_data = load_pdf_data(st.session_state.vector_store)
+    if loaded_pdf_data:
+        st.session_state['pdf_loaded_name'] = loaded_pdf_data.get('pdf_name', 'Unknown PDF')
+        st.session_state['pdf_chunk_count'] = loaded_pdf_data.get('chunk_count', 0)
 
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -426,19 +483,32 @@ if mode_options[selected_mode] != st.session_state.current_mode:
 if st.session_state.current_mode == "educational":
     # Show loaded PDF status if exists
     if 'pdf_loaded_name' in st.session_state and len(st.session_state.vector_store.documents) > 0:
-        st.success(f"📚 PDF Loaded: **{st.session_state['pdf_loaded_name']}** ({len(st.session_state.vector_store.documents)} chunks)")
-        st.info("✅ PDF will remain loaded even after closing the browser")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.success(f"📚 **{st.session_state['pdf_loaded_name']}** is loaded and ready")
+        with col2:
+            if st.button("🗑️ Clear PDF", type="secondary"):
+                st.session_state.vector_store.clear_all()
+                clear_pdf_data()
+                if 'pdf_loaded_name' in st.session_state:
+                    del st.session_state['pdf_loaded_name']
+                if 'pdf_chunk_count' in st.session_state:
+                    del st.session_state['pdf_chunk_count']
+                st.success("PDF cleared!")
+                st.rerun()
     
     with st.expander("📄 Upload PDF", expanded=len(st.session_state.vector_store.documents) == 0):
-        uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader")
+        uploaded_file = st.file_uploader("Choose a PDF file", type=['pdf'], key="pdf_uploader", label_visibility="collapsed")
         
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            if uploaded_file and st.button("Process PDF", type="primary"):
-                with st.spinner("Processing PDF..."):
+        if uploaded_file:
+            if st.button("📤 Process PDF", type="primary", use_container_width=True):
+                with st.spinner("🔄 Processing PDF..."):
+                    # Save PDF content
+                    pdf_content = uploaded_file.getbuffer()
+                    
                     temp_path = f"temp_{uploaded_file.name}"
                     with open(temp_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                        f.write(pdf_content)
                     
                     text = extract_text_from_pdf(temp_path)
                     chunks = split_text(text)
@@ -452,13 +522,17 @@ if st.session_state.current_mode == "educational":
                     
                     st.session_state.vector_store.add_documents(documents)
                     
-                    # Save PDF data for persistence
-                    save_pdf_data(st.session_state.vector_store, uploaded_file.name)
+                    # Save PDF data for persistence with actual content
+                    save_pdf_data(st.session_state.vector_store, uploaded_file.name, bytes(pdf_content))
                     st.session_state['pdf_loaded_name'] = uploaded_file.name
+                    st.session_state['pdf_chunk_count'] = len(chunks)
                     
                     os.remove(temp_path)
-                    st.success(f"✅ Processed {len(chunks)} chunks from {uploaded_file.name}")
-                    st.info("📱 PDF will stay loaded even after closing the app!")
+                    
+                    # Show success popup
+                    st.balloons()
+                    st.success(f"✅ **{uploaded_file.name}** processed successfully!")
+                    st.info("� PDF saved permanently - will persist across sessions")
                     st.rerun()
         
         with col2:
@@ -518,11 +592,17 @@ if prompt := st.chat_input("Ask me anything..."):
                             if len(context) > 2500:
                                 context = context[:2500] + "..."
                             
+                            # Get PDF name for reference
+                            pdf_name = st.session_state.get('pdf_loaded_name', 'the uploaded PDF')
+                            
                             # Add conversation history with PDF context
                             system_msg = f"""You are TORQ, an AI assistant. Answer questions based on the PDF content provided.
 
 PDF CONTENT:
 {context}
+
+IMPORTANT: At the end of your answer, always add a reference line:
+📚 Source: {pdf_name}
 
 Use this content to answer questions. Maintain conversation continuity by remembering previous exchanges."""
                             
@@ -535,11 +615,10 @@ Use this content to answer questions. Maintain conversation continuity by rememb
                             
                             # Add current question
                             messages.append({"role": "user", "content": prompt})
-                            
-                            st.info(f"📖 Found {len(context_docs)} relevant sections")
                         else:
-                            messages.append({"role": "user", "content": f"The PDF doesn't contain relevant information for: '{prompt}'"})
-                            st.warning("No relevant content found")
+                            pdf_name = st.session_state.get('pdf_loaded_name', 'the PDF')
+                            messages.append({"role": "user", "content": f"The PDF '{pdf_name}' doesn't contain relevant information for: '{prompt}'"})
+                            st.warning("⚠️ No relevant content found in PDF")
                     
                     except Exception as e:
                         messages.append({"role": "user", "content": f"Error searching PDF: {str(e)}"})
