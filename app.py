@@ -499,7 +499,8 @@ if prompt := st.chat_input("Ask me anything..."):
             if not api_key:
                 response = "⚠️ API key not configured. Please add GEMINI_API_KEY to Streamlit secrets."
             else:
-                conversation_context = get_conversation_context(st.session_state.messages[:-1])
+                # Build conversation history for context
+                messages = [{"role": "system", "content": "You are TORQ, a helpful AI assistant."}]
                 
                 if st.session_state.current_mode == "educational" and len(st.session_state.vector_store.documents) > 0:
                     try:
@@ -514,41 +515,50 @@ if prompt := st.chat_input("Ask me anything..."):
                         
                         if context_docs:
                             context = "\n\n".join(context_docs[:2])
-                            if len(context) > 2500:  # Reduced from 3000 to leave more room for response
+                            if len(context) > 2500:
                                 context = context[:2500] + "..."
                             
-                            full_prompt = f"""Based on PDF content, answer the question.
+                            # Add conversation history with PDF context
+                            system_msg = f"""You are TORQ, an AI assistant. Answer questions based on the PDF content provided.
 
 PDF CONTENT:
 {context}
 
-QUESTION: {prompt}
-
-DETAILED ANSWER:"""
+Use this content to answer questions. Maintain conversation continuity by remembering previous exchanges."""
+                            
+                            messages = [{"role": "system", "content": system_msg}]
+                            
+                            # Add recent conversation history (last 4 exchanges)
+                            recent_messages = st.session_state.messages[-8:] if len(st.session_state.messages) > 8 else st.session_state.messages[:-1]
+                            for msg in recent_messages:
+                                messages.append({"role": msg["role"], "content": msg["content"]})
+                            
+                            # Add current question
+                            messages.append({"role": "user", "content": prompt})
+                            
                             st.info(f"📖 Found {len(context_docs)} relevant sections")
                         else:
-                            full_prompt = f"The PDF doesn't contain relevant information for: '{prompt}'"
+                            messages.append({"role": "user", "content": f"The PDF doesn't contain relevant information for: '{prompt}'"})
                             st.warning("No relevant content found")
                     
                     except Exception as e:
-                        full_prompt = f"Error searching PDF: {str(e)}"
+                        messages.append({"role": "user", "content": f"Error searching PDF: {str(e)}"})
                 
                 elif st.session_state.current_mode == "educational":
-                    full_prompt = "Please upload a PDF first."
+                    messages.append({"role": "user", "content": "Please upload a PDF first to use Educational Mode."})
                     st.error("PDF required for Educational Mode")
                 
                 else:
-                    full_prompt = f"""You are TORQ, an AI assistant. Provide detailed, helpful responses.
-
-QUESTION: {prompt}
-
-DETAILED RESPONSE:"""
+                    # Personal Assistant Mode - include full conversation history
                     st.info("🤖 Personal Assistant Mode")
-                
-                messages = [
-                    {"role": "system", "content": "You are TORQ, a helpful AI assistant."},
-                    {"role": "user", "content": full_prompt}
-                ]
+                    
+                    # Add recent conversation history (last 6 exchanges = 12 messages)
+                    recent_messages = st.session_state.messages[-12:] if len(st.session_state.messages) > 12 else st.session_state.messages[:-1]
+                    for msg in recent_messages:
+                        messages.append({"role": msg["role"], "content": msg["content"]})
+                    
+                    # Add current question
+                    messages.append({"role": "user", "content": prompt})
                 
                 response = call_gemini(messages, api_key)
             
