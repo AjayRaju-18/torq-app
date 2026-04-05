@@ -161,7 +161,7 @@ def call_gemini(messages, api_key):
             })
     
     # Gemini API endpoint
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     data = {
         "contents": gemini_contents,
