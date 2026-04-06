@@ -673,16 +673,6 @@ if st.session_state.current_mode == "educational":
                     st.info("� PDF saved permanently - will persist across sessions")
                     st.rerun()
         
-        with col2:
-            if len(st.session_state.vector_store.documents) > 0 and st.button("Clear PDF"):
-                st.session_state.vector_store.clear_all()
-                if 'saved_pdf_data' in st.session_state:
-                    del st.session_state['saved_pdf_data']
-                if 'pdf_loaded_name' in st.session_state:
-                    del st.session_state['pdf_loaded_name']
-                st.success("PDF cleared")
-                st.rerun()
-        
         if len(st.session_state.vector_store.documents) > 0:
             st.info(f"📚 {len(st.session_state.vector_store.documents)} chunks loaded")
 
