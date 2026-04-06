@@ -332,6 +332,54 @@ def clear_pdf_data():
     if 'pdf_loaded_name' in st.session_state:
         del st.session_state['pdf_loaded_name']
 
+def save_chat_history(chat_id, title, mode, messages):
+    import os
+    import json
+    import uuid
+    from datetime import datetime
+    
+    storage_dir = "torq_storage"
+    if not os.path.exists(storage_dir):
+        os.makedirs(storage_dir)
+    storage_path = os.path.join(storage_dir, "chat_histories.json")
+    
+    histories = []
+    if os.path.exists(storage_path):
+        try:
+            with open(storage_path, 'r', encoding='utf-8') as f:
+                histories = json.load(f)
+        except:
+            histories = []
+    
+    # Update or append
+    chat_exists = False
+    for i, chat in enumerate(histories):
+        if chat.get('id') == chat_id:
+            histories[i] = {'id': chat_id, 'title': title, 'mode': mode, 'messages': messages, 'timestamp': datetime.now().isoformat()}
+            chat_exists = True
+            break
+            
+    if not chat_exists:
+        histories.insert(0, {'id': chat_id, 'title': title, 'mode': mode, 'messages': messages, 'timestamp': datetime.now().isoformat()})
+    
+    with open(storage_path, 'w', encoding='utf-8') as f:
+        json.dump(histories, f, indent=4)
+        
+    return histories
+
+def load_chat_histories():
+    import os
+    import json
+    storage_path = os.path.join("torq_storage", "chat_histories.json")
+    if os.path.exists(storage_path):
+        try:
+            with open(storage_path, 'r', encoding='utf-8') as f:
+                histories = json.load(f)
+                return sorted(histories, key=lambda x: x.get('timestamp', ''), reverse=True)
+        except:
+            return []
+    return []
+
 # Streamlit app
 st.set_page_config(
     page_title="TORQ", 
@@ -343,14 +391,14 @@ st.set_page_config(
 # ChatGPT-like CSS with responsive design
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
     
     * {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Outfit', sans-serif;
     }
     
     .main {
-        background-color: #ffffff;
+        background-color: transparent !important;
         padding: 0;
     }
     
@@ -360,33 +408,43 @@ st.markdown("""
     header {visibility: hidden;}
     .stDeployButton {visibility: hidden;}
     
-    /* Header */
+    /* Header - Premium Glassmorphism */
     .chat-header {
         text-align: center;
-        padding: 1.5rem 1rem;
-        border-bottom: 1px solid #e5e7eb;
-        margin-bottom: 1rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem 1rem;
+        margin-bottom: 2rem;
+        background: rgba(22, 33, 62, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     }
     
     .chat-title {
-        font-size: 2rem;
+        font-size: 2.5rem;
         font-weight: 700;
-        color: #ffffff;
+        background: linear-gradient(135deg, #a78bfa 0%, #fbcfe8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin: 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        letter-spacing: -0.5px;
     }
     
     .chat-subtitle {
-        color: rgba(255,255,255,0.9);
-        font-size: 0.9rem;
+        color: rgba(255,255,255,0.7);
+        font-size: 1rem;
         margin-top: 0.5rem;
+        font-weight: 300;
     }
     
     /* Sidebar styling */
     section[data-testid="stSidebar"] {
-        background-color: #f9fafb;
-        border-right: 1px solid #e5e7eb;
+        background: rgba(22, 33, 62, 0.95);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
     }
     
     section[data-testid="stSidebar"] > div {
@@ -395,152 +453,119 @@ st.markdown("""
     
     .sidebar-header {
         padding: 0 1rem 1rem 1rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         margin-bottom: 1rem;
     }
     
-    /* Chat messages */
+    /* Chat messages - Glass bubbles */
     .stChatMessage {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 0.5rem;
+        padding: 1.5rem;
+        border-radius: 1rem;
+        margin-bottom: 1.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
     /* Buttons */
     .stButton > button {
-        border-radius: 0.5rem;
+        border-radius: 0.75rem;
         font-weight: 500;
-        transition: all 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        color: #e5e7eb;
     }
     
     .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(139, 92, 246, 0.2);
+        background: rgba(139, 92, 246, 0.2);
+        border-color: rgba(139, 92, 246, 0.5);
     }
     
     /* File uploader */
     .stFileUploader {
-        border: 2px dashed #e5e7eb;
-        border-radius: 0.5rem;
-        padding: 1rem;
+        border: 2px dashed rgba(139, 92, 246, 0.4);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        background: rgba(0, 0, 0, 0.2);
+        transition: all 0.3s;
+    }
+    
+    .stFileUploader:hover {
+        border-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.05);
     }
     
     /* Expander */
     .streamlit-expanderHeader {
         font-weight: 600;
-        color: #374151;
+        color: #f3f4f6;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
     }
     
-    /* MOBILE RESPONSIVE */
+    /* MOBILE RESPONSIVE constraints */
     @media (max-width: 768px) {
-        /* Header adjustments */
         .chat-header {
             padding: 1rem 0.5rem;
+            margin-bottom: 1rem;
         }
         
-        .chat-title {
-            font-size: 1.5rem;
-        }
+        .chat-title { font-size: 1.8rem; }
+        .chat-subtitle { font-size: 0.85rem; }
         
-        .chat-subtitle {
-            font-size: 0.8rem;
-        }
-        
-        /* Sidebar for mobile */
+        /* Mobile sidebar */
         section[data-testid="stSidebar"] {
             width: 85% !important;
             max-width: 320px !important;
+            background: rgba(22, 33, 62, 0.98);
         }
         
-        section[data-testid="stSidebar"] > div {
-            width: 100% !important;
-            padding-top: 1rem;
-        }
-        
-        /* Sidebar toggle button */
+        /* Sidebar toggle button highly visible */
         button[kind="header"] {
-            background-color: #667eea !important;
+            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%) !important;
             color: white !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1rem !important;
-            font-weight: 600 !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+            border-radius: 50% !important;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
         }
         
-        /* Scrollable sidebar */
-        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-            overflow-y: auto !important;
-            max-height: 90vh !important;
-        }
-        
-        /* Chat input */
+        /* Fixed Chat input on mobile */
         .stChatInput {
-            position: sticky;
-            bottom: 0;
-            background: white;
-            padding: 0.5rem;
-            border-top: 1px solid #e5e7eb;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 1000 !important;
+            background: rgba(26, 26, 46, 0.95) !important;
+            padding: 1rem !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px);
         }
         
-        /* Reduce padding on mobile */
+        /* Padding to prevent chat hidden behind fixed input */
         .main .block-container {
-            padding: 1rem 0.5rem;
-        }
-        
-        /* Smaller buttons on mobile */
-        .stButton > button {
-            font-size: 0.9rem;
-            padding: 0.5rem 1rem;
-        }
-        
-        /* Stack columns on mobile */
-        .row-widget.stHorizontal {
-            flex-direction: column;
+            padding: 1rem 0.5rem 80px 0.5rem !important;
         }
     }
     
-    /* TABLET */
-    @media (min-width: 769px) and (max-width: 1024px) {
-        section[data-testid="stSidebar"] {
-            width: 280px !important;
-        }
-        
-        .chat-title {
-            font-size: 1.75rem;
-        }
-    }
-    
-    /* DESKTOP */
-    @media (min-width: 1025px) {
-        section[data-testid="stSidebar"] {
-            width: 300px !important;
-        }
-        
+    /* TABLET & DESKTOP container sizing */
+    @media (min-width: 769px) {
         .main .block-container {
-            max-width: 1200px;
-            padding: 2rem 3rem;
+            max-width: 1000px;
+            padding: 0 2rem 5rem 2rem;
         }
-        
-        .chat-header {
-            padding: 2rem 1rem;
-        }
-    }
-    
-    /* Success/Info/Warning boxes */
-    /* Success/Info/Warning boxes */
-    .stSuccess, .stInfo, .stWarning {
-        border-radius: 0.5rem;
-        padding: 0.75rem 1rem;
     }
     
     /* Mode selector */
     .stSelectbox {
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
     }
     
-    /* Smooth animations */
+    /* Smooth global animations */
     * {
-        transition: background-color 0.2s ease, color 0.2s ease;
+        transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -564,7 +589,7 @@ if 'current_chat_id' not in st.session_state:
     st.session_state.current_chat_id = str(uuid.uuid4())
 
 if 'chat_histories' not in st.session_state:
-    st.session_state.chat_histories = []
+    st.session_state.chat_histories = load_chat_histories()
 
 # Header
 st.markdown("""
@@ -771,5 +796,15 @@ Use this content to answer questions. Maintain conversation continuity by rememb
             
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+            
+            # Save history dynamically
+            if len(st.session_state.messages) > 0:
+                title = generate_chat_title(st.session_state.messages[0]["content"])
+                st.session_state.chat_histories = save_chat_history(
+                    st.session_state.current_chat_id,
+                    title,
+                    st.session_state.current_mode,
+                    st.session_state.messages
+                )
 
 st.markdown('</div>', unsafe_allow_html=True)
