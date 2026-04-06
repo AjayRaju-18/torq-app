@@ -382,10 +382,10 @@ def load_chat_histories():
 
 # Streamlit app
 st.set_page_config(
-    page_title="TORQ", 
+    page_title="TORQ",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="auto"  # Changed from "expanded" to "auto" for mobile
+    initial_sidebar_state="expanded"
 )
 
 # ChatGPT-like CSS with responsive design
@@ -442,19 +442,46 @@ st.markdown("""
     
     /* Sidebar styling */
     section[data-testid="stSidebar"] {
-        background: rgba(22, 33, 62, 0.95);
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
+        background: #16213e !important;
+        border-right: 1px solid rgba(167, 139, 250, 0.2) !important;
+        min-width: 260px !important;
     }
-    
+
+    section[data-testid="stSidebar"] * {
+        color: #e5e7eb !important;
+    }
+
     section[data-testid="stSidebar"] > div {
-        padding-top: 2rem;
+        padding-top: 1.5rem;
+        background: #16213e !important;
     }
-    
+
     .sidebar-header {
-        padding: 0 1rem 1rem 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0 0.5rem 1rem 0.5rem;
+        border-bottom: 1px solid rgba(167, 139, 250, 0.2);
         margin-bottom: 1rem;
+    }
+
+    /* Sidebar chat history buttons */
+    section[data-testid="stSidebar"] .stButton > button {
+        width: 100%;
+        text-align: left;
+        background: rgba(139, 92, 246, 0.08) !important;
+        border: 1px solid rgba(139, 92, 246, 0.2) !important;
+        color: #e5e7eb !important;
+        border-radius: 0.6rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.88rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 0.3rem;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(139, 92, 246, 0.25) !important;
+        border-color: rgba(139, 92, 246, 0.5) !important;
+        transform: translateX(3px);
     }
     
     /* Chat messages - Glass bubbles */
@@ -639,7 +666,19 @@ selected_mode = st.selectbox(
 )
 
 if mode_options[selected_mode] != st.session_state.current_mode:
+    # Save current chat before switching mode
+    if st.session_state.messages:
+        title = generate_chat_title(st.session_state.messages[0]["content"])
+        st.session_state.chat_histories = save_chat_history(
+            st.session_state.current_chat_id,
+            title,
+            st.session_state.current_mode,
+            st.session_state.messages
+        )
+    # Start a fresh chat in the new mode
     st.session_state.current_mode = mode_options[selected_mode]
+    st.session_state.messages = []
+    st.session_state.current_chat_id = str(uuid.uuid4())
     st.rerun()
 
 # PDF Upload for Educational Mode
