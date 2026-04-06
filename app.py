@@ -440,20 +440,24 @@ st.markdown("""
         font-weight: 300;
     }
     
-    /* Sidebar styling */
+    /* Sidebar styling - solid so content is always visible */
     section[data-testid="stSidebar"] {
         background: #16213e !important;
-        border-right: 1px solid rgba(167, 139, 250, 0.2) !important;
-        min-width: 260px !important;
-    }
-
-    section[data-testid="stSidebar"] * {
-        color: #e5e7eb !important;
+        border-right: 1px solid rgba(167, 139, 250, 0.25) !important;
+        min-width: 220px !important;
     }
 
     section[data-testid="stSidebar"] > div {
         padding-top: 1.5rem;
         background: #16213e !important;
+    }
+
+    /* Sidebar labels and markdown text */
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stMarkdown span,
+    section[data-testid="stSidebar"] .stMarkdown strong,
+    section[data-testid="stSidebar"] label {
+        color: #e5e7eb !important;
     }
 
     .sidebar-header {
@@ -466,22 +470,26 @@ st.markdown("""
     section[data-testid="stSidebar"] .stButton > button {
         width: 100%;
         text-align: left;
-        background: rgba(139, 92, 246, 0.08) !important;
-        border: 1px solid rgba(139, 92, 246, 0.2) !important;
+        background: rgba(139, 92, 246, 0.1) !important;
+        border: 1px solid rgba(139, 92, 246, 0.25) !important;
         color: #e5e7eb !important;
-        border-radius: 0.6rem;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.88rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        border-radius: 0.6rem !important;
+        font-size: 0.88rem !important;
         margin-bottom: 0.3rem;
     }
 
     section[data-testid="stSidebar"] .stButton > button:hover {
         background: rgba(139, 92, 246, 0.25) !important;
-        border-color: rgba(139, 92, 246, 0.5) !important;
+        border-color: rgba(139, 92, 246, 0.6) !important;
+        color: #ffffff !important;
         transform: translateX(3px);
+    }
+
+    /* Sidebar info box */
+    section[data-testid="stSidebar"] .stAlert {
+        background: rgba(139, 92, 246, 0.08) !important;
+        border: 1px solid rgba(139, 92, 246, 0.2) !important;
+        color: #d1d5db !important;
     }
     
     /* Chat messages - Glass bubbles */
@@ -628,25 +636,31 @@ st.markdown("""
 
 # Sidebar
 with st.sidebar:
-    st.markdown('<div class="sidebar-header">', unsafe_allow_html=True)
-    if st.button("+ New chat", key="new_chat"):
+    st.markdown("""
+    <div style="padding: 0.5rem; margin-bottom: 0.5rem;">
+        <h2 style="color: #a78bfa; font-size: 1.4rem; font-weight: 700; margin: 0;">🤖 TORQ</h2>
+        <p style="color: #9ca3af; font-size: 0.78rem; margin: 0.3rem 0 0 0;">AI Assistant History</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("➕ New Chat", key="new_chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.current_chat_id = str(uuid.uuid4())
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("**Recent chats**")
-    
+
+    st.divider()
+
     if st.session_state.chat_histories:
-        for chat in st.session_state.chat_histories[:10]:
+        for chat in st.session_state.chat_histories[:15]:
             mode_icon = "🤖" if chat.get('mode', 'personal') == "personal" else "📚"
-            if st.button(f"{chat.get('title', 'Chat')}", key=f"chat_{chat.get('id', '')}"):
+            label = f"{mode_icon} {chat.get('title', 'Chat')}"
+            if st.button(label, key=f"chat_{chat.get('id', '')}", use_container_width=True):
                 st.session_state.messages = chat.get('messages', []).copy()
                 st.session_state.current_mode = chat.get('mode', 'personal')
                 st.session_state.current_chat_id = chat.get('id', str(uuid.uuid4()))
                 st.rerun()
     else:
-        st.info("No conversations yet")
+        st.markdown("<p style='color:#9ca3af; font-size:0.85rem; padding: 0.5rem;'>No conversations yet. Start chatting!</p>", unsafe_allow_html=True)
 
 # Main content
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
