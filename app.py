@@ -480,21 +480,6 @@ st.markdown("""
         .chat-title { font-size: 1.8rem; }
         .chat-subtitle { font-size: 0.85rem; }
         
-        /* Mobile sidebar */
-        section[data-testid="stSidebar"] {
-            width: 85% !important;
-            max-width: 320px !important;
-            background: rgba(22, 33, 62, 0.98);
-        }
-        
-        /* Sidebar toggle button highly visible */
-        button[kind="header"] {
-            background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%) !important;
-            color: white !important;
-            border-radius: 50% !important;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
-        }
-        
         /* Fixed Chat input on mobile */
         .stChatInput {
             position: fixed !important;
@@ -565,20 +550,17 @@ st.markdown("""
 
 # Sidebar
 with st.sidebar:
-    st.markdown("""
-    <div style="padding: 0.5rem; margin-bottom: 0.5rem;">
-        <h2 style="color: #a78bfa; font-size: 1.4rem; font-weight: 700; margin: 0;">🤖 TORQ</h2>
-        <p style="color: #9ca3af; font-size: 0.78rem; margin: 0.3rem 0 0 0;">AI Assistant History</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("➕ New Chat", key="new_chat", use_container_width=True):
+    st.title("🤖 TORQ")
+    st.caption("AI Assistant History")
+    
+    if st.button("➕ New Chat", use_container_width=True, type="primary"):
         st.session_state.messages = []
         st.session_state.current_chat_id = str(uuid.uuid4())
         st.rerun()
-
+        
     st.divider()
-
+    
+    st.subheader("Recent Conversations")
     if st.session_state.chat_histories:
         for chat in st.session_state.chat_histories[:15]:
             mode_icon = "🤖" if chat.get('mode', 'personal') == "personal" else "📚"
@@ -589,7 +571,7 @@ with st.sidebar:
                 st.session_state.current_chat_id = chat.get('id', str(uuid.uuid4()))
                 st.rerun()
     else:
-        st.markdown("<p style='color:#9ca3af; font-size:0.85rem; padding: 0.5rem;'>No conversations yet. Start chatting!</p>", unsafe_allow_html=True)
+        st.info("No conversations yet. Start chatting!")
 
 # Main content
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
