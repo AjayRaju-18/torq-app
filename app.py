@@ -333,52 +333,31 @@ def clear_pdf_data():
         del st.session_state['pdf_loaded_name']
 
 def save_chat_history(chat_id, title, mode, messages):
-    import os
-    import json
-    import uuid
+    """Save chat to session state (works on Streamlit Cloud)."""
     from datetime import datetime
     
-    storage_dir = "torq_storage"
-    if not os.path.exists(storage_dir):
-        os.makedirs(storage_dir)
-    storage_path = os.path.join(storage_dir, "chat_histories.json")
+    histories = st.session_state.get('chat_histories', [])
     
-    histories = []
-    if os.path.exists(storage_path):
-        try:
-            with open(storage_path, 'r', encoding='utf-8') as f:
-                histories = json.load(f)
-        except:
-            histories = []
-    
-    # Update or append
-    chat_exists = False
+    entry = {
+        'id': chat_id,
+        'title': title,
+        'mode': mode,
+        'messages': messages,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # Update existing or insert at top
     for i, chat in enumerate(histories):
         if chat.get('id') == chat_id:
-            histories[i] = {'id': chat_id, 'title': title, 'mode': mode, 'messages': messages, 'timestamp': datetime.now().isoformat()}
-            chat_exists = True
-            break
-            
-    if not chat_exists:
-        histories.insert(0, {'id': chat_id, 'title': title, 'mode': mode, 'messages': messages, 'timestamp': datetime.now().isoformat()})
-    
-    with open(storage_path, 'w', encoding='utf-8') as f:
-        json.dump(histories, f, indent=4)
-        
+            histories[i] = entry
+            return histories
+
+    histories.insert(0, entry)
     return histories
 
 def load_chat_histories():
-    import os
-    import json
-    storage_path = os.path.join("torq_storage", "chat_histories.json")
-    if os.path.exists(storage_path):
-        try:
-            with open(storage_path, 'r', encoding='utf-8') as f:
-                histories = json.load(f)
-                return sorted(histories, key=lambda x: x.get('timestamp', ''), reverse=True)
-        except:
-            return []
-    return []
+    """Load from session state (always empty on first load — expected)."""
+    return st.session_state.get('chat_histories', [])
 
 # Streamlit app
 st.set_page_config(
@@ -440,57 +419,7 @@ st.markdown("""
         font-weight: 300;
     }
     
-    /* Sidebar styling - solid so content is always visible */
-    section[data-testid="stSidebar"] {
-        background: #16213e !important;
-        border-right: 1px solid rgba(167, 139, 250, 0.25) !important;
-        min-width: 220px !important;
-    }
 
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.5rem;
-        background: #16213e !important;
-    }
-
-    /* Sidebar labels and markdown text */
-    section[data-testid="stSidebar"] .stMarkdown p,
-    section[data-testid="stSidebar"] .stMarkdown span,
-    section[data-testid="stSidebar"] .stMarkdown strong,
-    section[data-testid="stSidebar"] label {
-        color: #e5e7eb !important;
-    }
-
-    .sidebar-header {
-        padding: 0 0.5rem 1rem 0.5rem;
-        border-bottom: 1px solid rgba(167, 139, 250, 0.2);
-        margin-bottom: 1rem;
-    }
-
-    /* Sidebar chat history buttons */
-    section[data-testid="stSidebar"] .stButton > button {
-        width: 100%;
-        text-align: left;
-        background: rgba(139, 92, 246, 0.1) !important;
-        border: 1px solid rgba(139, 92, 246, 0.25) !important;
-        color: #e5e7eb !important;
-        border-radius: 0.6rem !important;
-        font-size: 0.88rem !important;
-        margin-bottom: 0.3rem;
-    }
-
-    section[data-testid="stSidebar"] .stButton > button:hover {
-        background: rgba(139, 92, 246, 0.25) !important;
-        border-color: rgba(139, 92, 246, 0.6) !important;
-        color: #ffffff !important;
-        transform: translateX(3px);
-    }
-
-    /* Sidebar info box */
-    section[data-testid="stSidebar"] .stAlert {
-        background: rgba(139, 92, 246, 0.08) !important;
-        border: 1px solid rgba(139, 92, 246, 0.2) !important;
-        color: #d1d5db !important;
-    }
     
     /* Chat messages - Glass bubbles */
     .stChatMessage {
